@@ -1,0 +1,10 @@
+uniubi_ros2
+Copyright 2026 UniUbi
+
+This repository is licensed under the Apache License, Version 2.0, except
+where a file or included artifact states a different license.
+
+Original UniUbi source code, ROS 2 integration code, examples, and
+documentation in this repository are made available under Apache-2.0. Vendored
+third-party components are subject to their own license terms. See
+THIRD_PARTY_NOTICES.md for component-specific notices.
