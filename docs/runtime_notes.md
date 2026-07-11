@@ -23,12 +23,14 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 ```
 
-同一 DDS Domain 内存在多台机器人时，请求必须携带目标 `device_id`。推荐直接复用 `uniubi_interface_test` 里的 `MotionHighLevelClient` 或 `SystemRpcClientBase`，由示例封装统一处理请求发送和响应等待。
+同一 DDS Domain 内存在多台机器人时，请求必须携带目标 `device_id`。`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将该字段写入每个 `System.srv` 请求；robotServer 按目标设备 SN 过滤请求，只有匹配设备响应。
 
 字段边界如下：
 
-- `device_id` 是 `uniubi/srv/System` 的显式字段，用于目标设备路由；收到响应后仍要检查响应 `device_id` 是否匹配目标设备。
+- `device_id` 是 `uniubi/srv/System` 的显式字段，用于目标设备路由。
 - `Header.msg` 的 `client_id` / `request_id` 来自 `Request.idl`；`System.srv` 不含该 Header 字段。
+
+ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前示例按上述服务端路由契约工作，并检查响应 `code` 和业务 payload；不会额外比较 `response.device_id`。
 
 二次开发时，业务代码通常通过封装后的客户端方法发起调用；新增 RPC 时，优先在示例客户端封装层扩展。
 
@@ -37,9 +39,9 @@ export ROS_DOMAIN_ID=42
 `uniubi/srv/System.srv` 是示例客户端内部使用的 RPC service 接口。正常二次开发应优先使用封装后的调用层：
 
 - `MotionHighLevelClient`：高级动作、取控、续约、释放等业务流程。
-- `SystemRpcClientBase`：统一处理 `service` / `method` / `params` 请求构造、超时和响应检查。
+- `SystemRpcClientBase`：统一处理 `service` / `method` / `params` 请求构造、超时和响应等待。
 
-新增 ROS 2 示例或扩展现有示例时，应沿用这几个入口，保持 `device_id`、超时和目标设备响应检查一致。需要核对 `.srv` / `.msg` 字段时，以 `uniubi_robot_msgs` 发布的接口包为准。
+新增 ROS 2 示例或扩展现有示例时，应沿用这几个入口，保持请求 `device_id` 和超时处理一致。需要核对 `.srv` / `.msg` 字段时，以 `uniubi_robot_msgs` 发布的接口包为准。
 
 ## HighLevel 动作是异步的
 

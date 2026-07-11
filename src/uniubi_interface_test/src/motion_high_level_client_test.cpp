@@ -136,8 +136,8 @@ public:
       // 如果服务端没有下发 rawActionId，MotionHighLevelClient 会返回 kActionRejected。
       MotionHighLevelClient::TRCStickFrame frame;
       frame.valid = 1;
-      frame.buttons[MotionHighLevelClient::buttonStart] = 1;  // Motion
-      frame.buttons[MotionHighLevelClient::buttonA] = 1;  // Motion + A = Lie Down（内部动作 laying）
+      frame.buttons[MotionHighLevelClient::buttonBack] = 1;  // Stand
+      frame.buttons[MotionHighLevelClient::buttonA] = 1;  // Stand + A = Lie Down（内部动作 laying）
       if (!client_->setRawControlCmd(frame)) {
         std::cout << "setRawControlCmd skipped/failed: err=" << client_->getLastError() << std::endl;
       }

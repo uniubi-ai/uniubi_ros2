@@ -73,16 +73,18 @@ ros2 run uniubi_interface_test motion_high_level_client_test
 | `UNIUBI_TEST_EVENT_TOPIC` | `/robotServer/Event` | 事件 topic |
 | `UNIUBI_TEST_DEVICE_ID` | 无 | 目标设备 SN，真实环境必须显式配置 |
 
+`motion_high_level_client_test` 的默认流程为：查询运动能力和系统状态、获取并续约控制权、尝试播放 / 暂停 / 停止音频、查询音频状态、开启再关闭运控观测上报，最后释放控制权。运动动作和原始 TRC 默认由 `kEnableMotionActionDemo=false` 关闭；示例默认不会执行站立、趴下或 walking。打开该开关后，当前测试代码执行 walking 和 TRC 调试，运行前必须确认场地、急停和人工接管条件。
+
 ## 多设备匹配
 
-同一 DDS Domain 存在多台设备时，运行示例必须填写目标 `device_id`。推荐直接基于 `uniubi_interface_test` 里的 `MotionHighLevelClient` 或 `SystemRpcClientBase` 做二次开发，由示例封装统一处理请求发送和响应等待。
+同一 DDS Domain 存在多台设备时，运行示例必须填写目标 `device_id`。`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将该字段写入每个 `System.srv` 请求；robotServer 按目标设备 SN 过滤请求，只有匹配设备响应。
 
 字段边界如下：
 
-- `device_id` 是 `uniubi/srv/System` 的显式字段，用于目标设备路由；收到响应后仍要检查响应 `device_id` 是否为目标设备。
+- `device_id` 是 `uniubi/srv/System` 的显式字段，用于目标设备路由。
 - `Header.msg` 的 `client_id` / `request_id` 来自 `Request.idl`；`System.srv` 不含该 Header 字段。
 
-业务代码通常通过封装后的客户端方法发起调用；新增 RPC 时，优先在示例客户端封装层扩展。非目标设备响应不能当作目标设备结果。
+ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前示例按上述服务端路由契约工作，并检查响应 `code` 和业务 payload；不会额外比较 `response.device_id`。业务代码通常通过封装后的客户端方法发起调用；新增 RPC 时，优先在示例客户端封装层扩展。
 
 ## 安全策略
 
