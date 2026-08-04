@@ -1,7 +1,7 @@
 # Uniubi ROS 2
 
-Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、原始 DDS
-topic 接入和 Direct RPC 调试示例。
+Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端，以及
+DDS / ROS 2 协议直连接口和示例。
 
 robotServer 原始 `.msg` / `.srv` 定义统一来自
 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs)，其 ROS 2 package 名和
@@ -11,21 +11,20 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 
 ## 从这里开始
 
-仓库提供一个默认业务入口和三个按需使用的高级入口。业务开发直接选择 Motion bridge：
+仓库提供一个默认业务入口和两个按需使用的高级入口。业务开发直接选择 Motion bridge：
 
 | 使用方式 | 适合谁 | 控制权管理 | 主要接口 | 推荐度 |
 |---|---|---|---|---|
 | Motion bridge | 普通 ROS 2 业务节点 | bridge 自动取权、续约和释放 | `/motion/*`、`/cmd_vel`、标准传感器 topic | 推荐 |
 | `uniubi_motion_client` | 需要更多高级运控能力的 C++ 开发者 |应用显式调用 `connect/startControl/releaseControl` | C++ 方法和回调 | 高级 |
-| Direct DDS topic | 需要完整原始字段的开发者 | 只读订阅不需要控制权 | `/motion/observed` 等原始 topic | 高级 |
-| Direct RPC | 协议维护和请求响应调试 | 控制类 RPC 由应用自行管理 | `uniubi/srv/System` | 协议调试 |
+| DDS / ROS 2 协议直连 | 原始数据、协议维护和跨框架接入 | 只读数据不需要；控制流程自行管理 | RPC、Event、原始 topic、TRC | 协议级 |
 
-四种方式的完整优缺点和选型说明见
+三种方式的完整优缺点和选型说明见
 [`docs/ros2_usage_modes.md`](docs/ros2_usage_modes.md)。
 
-表中的 Direct DDS topic 和 Direct RPC 是为了便于选型而拆开的两个入口，底层都属于同一套
-[DDS / ROS 2 直连接入协议](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)。
-完整协议还包含 Event、控制权生命周期和 TRC，不应把 Direct DDS 理解成只读接口。
+DDS / ROS 2 协议直连是一种完整的底层接入方式，同时包含 RPC、Event、数据 topic、控制权
+生命周期和 TRC；不是“Direct DDS”和“Direct RPC”两种并列方案。协议契约见
+[DDS / ROS 2 直连接入 API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)。
 
 > **功能范围：** Motion bridge 当前以常用运动控制为主，并选择性提供里程计、关节、IMU、
 > 电池等标准 ROS 2 观测接口。它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量
@@ -165,10 +164,8 @@ Topics：
 
 - 需要在自己的 C++ 节点中直接调用高级运控方法：使用
   [`uniubi_motion_client`](docs/ros2_usage_modes.md#方式二uniubi_motion_client-c-客户端)。
-- 需要订阅原始消息或调试 QoS/类型映射：使用
-  [Direct DDS topic](docs/ros2_usage_modes.md#方式三direct-dds-topic)。
-- 需要新增请求/响应接口：使用
-  [Direct RPC](docs/ros2_usage_modes.md#方式四direct-rpc)。
+- 需要订阅原始消息、调试 QoS/类型映射或新增协议接口：使用
+  [DDS / ROS 2 协议直连](docs/ros2_usage_modes.md#方式三dds--ros-2-协议直连)。
 - 只读订阅原始 Walk 里程计：
 
 ```bash
@@ -182,7 +179,7 @@ ros2 run uniubi_motion_client motion_odometry_subscriber
 | 文档 | 面向人群 | 内容 |
 |---|---|---|
 | [README](README.md) | 所有开发者 | 选型、安装和推荐方式快速开始 |
-| [ROS 2 使用方式](docs/ros2_usage_modes.md) | 架构设计与高级开发者 | 四种方式的流程、优缺点和选择建议 |
+| [ROS 2 使用方式](docs/ros2_usage_modes.md) | 架构设计与高级开发者 | 三种方式的流程、优缺点和选择建议 |
 | [Motion bridge 使用手册](docs/motion_bridge.md) | 普通业务开发者 | `/motion/*`、`/cmd_vel`、状态和观测接口 |
 | [运行注意事项](docs/runtime_notes.md) | 联调和协议开发者 | DDS、设备匹配、异步语义和安全边界 |
 | [DDS / ROS 2 Direct API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) | 协议开发者 | 原始 RPC、DDS topic 和字段契约 |

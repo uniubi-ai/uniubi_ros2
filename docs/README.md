@@ -18,23 +18,16 @@
 `src/uniubi_motion_client` 的头文件和示例。该客户端是仓库源码组件，不依赖
 `librobotMotionSdk.so`，但调用方需要自行管理连接、控制权和退出流程。
 
-## 需要原始数据的 ROS 2 开发者
+## DDS / ROS 2 协议直连开发者
 
 阅读：
 
-1. [ROS 2 使用方式](ros2_usage_modes.md) 中的 Direct DDS topic 边界。
-2. [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)：原始 topic 和 QoS。
-3. [`ros2_dds_interop_overview.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/ros2_dds_interop_overview.md)：IDL 映射规范。
-4. [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs)：消息定义信源。
+1. [ROS 2 使用方式](ros2_usage_modes.md) 中的协议直连边界。
+2. [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)：RPC、Event、原始 topic、控制权和 QoS 的完整契约。
+3. [运行注意事项](runtime_notes.md)：本仓接入时的 DDS Domain、设备匹配和运行约束。
+4. [`ros2_dds_interop_overview.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/ros2_dds_interop_overview.md)：需要维护类型时再阅读 IDL 映射规范。
+5. [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs)：消息定义信源。
 
-这组文档主要面向需要 bridge 未转换字段、原始数据接入或排查 DDS 类型兼容问题的开发者。
-
-## Direct RPC 和协议维护者
-
-阅读：
-
-1. [ROS 2 使用方式](ros2_usage_modes.md) 中的 Direct RPC 边界。
-2. [运行注意事项](runtime_notes.md) 中的 DDS Domain、设备匹配和 RPC 封装约束。
-3. [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)：wire API。
-
-这组文档只面向新增 RPC、核对 JSON 请求响应或定位 robotServer 协议问题的开发者。
+这是一种完整的协议级接入方式，不再拆分成 Direct DDS 和 Direct RPC 两种方案。只需要原始
+只读数据的开发者可以只阅读相应 topic 小节；新增 RPC、执行控制或移植到其他 DDS 框架时，
+需要同时理解请求响应、Event、控制权和数据通道。
