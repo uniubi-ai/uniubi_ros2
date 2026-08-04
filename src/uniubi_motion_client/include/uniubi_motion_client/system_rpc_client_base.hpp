@@ -1,5 +1,5 @@
-#ifndef UNIUBI_INTERFACE_TEST__SYSTEM_RPC_CLIENT_BASE_HPP_
-#define UNIUBI_INTERFACE_TEST__SYSTEM_RPC_CLIENT_BASE_HPP_
+#ifndef UNIUBI_MOTION_CLIENT__SYSTEM_RPC_CLIENT_BASE_HPP_
+#define UNIUBI_MOTION_CLIENT__SYSTEM_RPC_CLIENT_BASE_HPP_
 
 #include <chrono>
 #include <cstdint>
@@ -9,7 +9,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "uniubi/srv/system.hpp"
 
-namespace uniubi_interface_test
+namespace uniubi_motion_client
 {
 
 struct SystemRpcRequest
@@ -149,6 +149,6 @@ private:
   std::string client_id_;
 };
 
-}  // namespace uniubi_interface_test
+}  // namespace uniubi_motion_client
 
-#endif  // UNIUBI_INTERFACE_TEST__SYSTEM_RPC_CLIENT_BASE_HPP_
+#endif  // UNIUBI_MOTION_CLIENT__SYSTEM_RPC_CLIENT_BASE_HPP_

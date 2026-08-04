@@ -1,18 +1,53 @@
 # 运行注意事项
 
-本文记录使用 `uniubi_interface_test` 二次开发时容易踩坑的 ROS 2 集成行为。完整 DDS / ROS 2 协议说明统一维护在 [uniubi-docs](https://github.com/uniubi-ai/uniubi-docs)。
+本文记录使用 `uniubi_motion_client` 和 `uniubi_motion_bridge` 二次开发时容易踩坑的 ROS 2 集成行为。完整 DDS / ROS 2 协议说明统一维护在 [uniubi-docs](https://github.com/uniubi-ai/uniubi-docs)。
 
-## Direct API 范围
+## Direct RPC 范围
 
-本仓不链接 `librobotMotionSdk.so`。ROS 2 示例通过 `uniubi/srv/System` 和 DDS topic 直接对接 robotServer：
+本仓不链接 `librobotMotionSdk.so`。Direct RPC 通过 `uniubi/srv/System` 对接 robotServer：
 
 - RPC service：`uniubi/srv/System`
-- Event topic：`/robotServer/Event`
-- Motion observation topic：`/motion/observed`
-- Sensor observation topic：`/sensor/observed`
-- TRC topic：`/motion/trc`
+- 异步控制事件：`/robotServer/Event`
 
-ROS 2 Direct API 测试通过，只能说明 ROS 2 消息 / 服务契约和 DDS 路由可用；不能代表 C++ 或 Python SDK runtime 运行库链路可用。
+只读查询不需要控制权。直接执行控制 RPC 时，调用方必须自行处理取权、续约、Event 和释放。
+Direct RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ 或 Python SDK runtime 链路可用。
+
+## Direct DDS topic 范围
+
+原始持续数据通过 DDS/ROS 2 topic 提供：
+
+- Motion observation topic：`/motion/observed`
+- Walk odometry topic：`/motion/odometry`
+- Sensor observation topic：`/sensor/observed`
+- 原始控制 topic：`/motion/trc`（不是普通只读数据流）
+
+订阅前三类观测 topic 不要求同时调用 `System.srv`。Direct DDS topic 测试通过只说明消息类型、
+DDS 发现和 QoS 链路可用。
+
+`/motion/odometry` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，不受 `setMotionObservedEnable()` 控制。订阅不需要 High Level 控制权；显式 reset 需要控制权。里程计仅在 Walk 模式有效，切换到其他动作后 `position` / `yaw` 清零、`epoch` 递增且 `valid=false`。
+
+## Motion bridge 速度安全边界
+
+- `start_action` 在需要时自动申请 SDK 高级运控控制权；不对外提供独立 `take_control` 服务。
+- `/cmd_vel` 不申请控制权、不查询、启动或切换动作，只把三个速度字段直接交给 `setActionParams`。
+- `linear.y` 保持 UniUbi 的“正右负左”定义，不做 ROS REP-103 符号转换。
+- bridge 只读取 `linear.x`、`linear.y` 和 `angular.z`，不做动作判断或速度限幅；SDK 与服务端负责校验和安全限制。
+- 接收超时只发送一次三个速度字段均为零的参数，不停止动作、不释放控制权。
+- 高频输入会合并为最新值，并按 `cmd_vel_rate_hz` 限频，避免同步 RPC 排队。
+- `stop_action` 只停止动作并继续持权续约；`release_control` 与进程退出会先停止动作再释放控制会话。
+
+`/odom` 仅转发 `valid=true` 的设备累计里程计，不再次积分，也暂不发布 TF。原始生命周期字段仍以 `/motion/odometry` 为准。
+
+## Motion bridge 状态观测
+
+- `/motion/status` 通过 10 Hz `queryMotionState` RPC 发布实际动作、速度、控制状态和最近错误；它不参与 `/cmd_vel` 下发。
+- `/motion/status` 最多有一个查询周期的显示延迟，不能当作逐控制帧反馈。
+- 内部 `/robotServer/Event` 仍用于立即发现控制权抢占；bridge 将已知事件转换成结构化状态，未知原始 JSON 只写 DEBUG 日志，不再公开 `~/events`。
+- `/joint_states`、`/imu/data` 和 `/battery_state` 都由 `/motion/observed` 转换，不需要 High Level 控制权。
+- bridge 通过只读 `getMotorLayout` RPC 获取关节名称和 `(limbNo, jointNo)`，不依赖固定电机数组顺序。
+- `/joint_states` 的 position/velocity/effort 分别来自电机 position/velocity/torque；故障码、在线状态和温度仍以原始 `/motion/observed` 为准。
+- `/imu/data` 仅在 accel/gyro 有效时发布；四元数无效时按 `sensor_msgs/Imu` 约定标记 orientation 不可用。
+- `/battery_state.percentage` 范围为 0-1；设备 power 原始字段范围为 0-100。未提供的容量字段用 NaN 表示。
 
 ## DDS 与设备匹配
 
@@ -23,7 +58,14 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 ```
 
-同一 DDS Domain 内存在多台机器人时，请求必须携带目标 `device_id`。`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将该字段写入每个 `System.srv` 请求；robotServer 按目标设备 SN 过滤请求，只有匹配设备响应。
+`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将目标 `device_id` 写入每个 `System.srv`
+请求；robotServer 按目标设备 SN 过滤 RPC 请求，只有匹配设备响应。但该机制只覆盖 RPC，不能
+隔离 `/motion/observed`、`/motion/odometry`、`/sensor/observed` 和 `/robotServer/Event` 等
+原始 topic，因为这些消息当前没有可供 bridge 过滤的 `device_id`。
+
+此外，多个 bridge 使用相同的 `/cmd_vel`、`/motion/*`、`/odom` 等全局 ROS 名称时也会发生接口
+冲突。因此当前多机器人部署应同时做到：每条机器人使用独立的 `ROS_DOMAIN_ID`，并避免多个
+bridge 出现在同一 ROS graph。仅设置不同的 RPC `device_id` 不足以保证多机器人隔离。
 
 字段边界如下：
 
@@ -41,7 +83,7 @@ ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前�
 - `MotionHighLevelClient`：高级动作、取控、续约、释放等业务流程。
 - `SystemRpcClientBase`：统一处理 `service` / `method` / `params` 请求构造、超时和响应等待。
 
-新增 ROS 2 示例或扩展现有示例时，应沿用这几个入口，保持请求 `device_id` 和超时处理一致。需要核对 `.srv` / `.msg` 字段时，以 `uniubi_robot_msgs` 发布的接口包为准。
+新增 ROS 2 示例或扩展现有示例时，应沿用这几个入口，保持请求 `device_id` 和超时处理一致。需要核对 `.srv` / `.msg` 字段时，以 `uniubi_robot_msgs` 仓库发布的同名接口包为准。
 
 ## HighLevel 动作是异步的
 
@@ -60,4 +102,4 @@ ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前�
 
 ## 安全门控
 
-真实机器人上应将高风险运动放在明确的人工确认之后。带速度参数的 walking、`move`、`bipedStand`、`handstand`、`waveBody`、`peakLoadStand` 和 `jump*` 都按高风险动作处理。急停、TRC 全零帧、音频播放 / 暂停 / 停止、音频增删和灯光设置不属于高风险运动动作，但仍需要满足接口持权和参数要求。
+真实机器人上应将高风险运动放在明确的人工确认之后。带速度参数的 walking、`move`、`bipedStand`、`handstand`、`waveBody` 和 `jump*` 都按高风险动作处理。急停、TRC 全零帧、音频播放 / 暂停 / 停止、音频增删和灯光设置不属于高风险运动动作，但仍需要满足接口持权和参数要求。

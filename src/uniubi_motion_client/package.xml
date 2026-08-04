@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>uniubi_interface_test</name>
+  <name>uniubi_motion_client</name>
   <version>0.1.0</version>
-  <description>Simple build and runtime smoke test for the Uniubi ROS 2 interfaces.</description>
+  <description>Reusable ROS 2 high-level motion client for UniUbi robotServer.</description>
   <maintainer email="support@uniubi.com">Uniubi</maintainer>
   <license>Apache-2.0</license>
 

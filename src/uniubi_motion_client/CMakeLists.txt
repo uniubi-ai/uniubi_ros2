@@ -1,44 +1,43 @@
 cmake_minimum_required(VERSION 3.8)
-project(uniubi_interface_test)
-
-include(FetchContent)
+project(uniubi_motion_client)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(uniubi REQUIRED)
 
-FetchContent_Declare(jsoncpp
-  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/jsoncpp
-)
-set(JSONCPP_WITH_TESTS OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_WARNING_AS_ERROR OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_PKGCONFIG_SUPPORT OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(jsoncpp)
-
 add_library(motion_high_level_client
   src/system_rpc_client_base.cpp
   src/motion_high_level_client.cpp
+  third_party/jsoncpp/src/lib_json/json_reader.cpp
+  third_party/jsoncpp/src/lib_json/json_value.cpp
+  third_party/jsoncpp/src/lib_json/json_writer.cpp
 )
 target_include_directories(motion_high_level_client PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/jsoncpp/include>
   $<INSTALL_INTERFACE:include>
 )
 ament_target_dependencies(motion_high_level_client
   rclcpp
   uniubi
 )
-target_link_libraries(motion_high_level_client jsoncpp_lib)
 
-add_executable(motion_high_level_client_test src/motion_high_level_client_test.cpp)
-ament_target_dependencies(motion_high_level_client_test
+add_executable(motion_high_level_client_example src/motion_high_level_client_example.cpp)
+ament_target_dependencies(motion_high_level_client_example
   rclcpp
   uniubi
 )
-target_link_libraries(motion_high_level_client_test motion_high_level_client jsoncpp_lib)
+target_link_libraries(motion_high_level_client_example motion_high_level_client)
+
+add_executable(motion_odometry_subscriber src/motion_odometry_subscriber.cpp)
+ament_target_dependencies(motion_odometry_subscriber
+  rclcpp
+  uniubi
+)
 
 install(TARGETS
-  motion_high_level_client_test
+  motion_high_level_client_example
+  motion_odometry_subscriber
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -50,6 +49,9 @@ install(TARGETS motion_high_level_client
 )
 
 install(DIRECTORY include/
+  DESTINATION include
+)
+install(DIRECTORY third_party/jsoncpp/include/json
   DESTINATION include
 )
 

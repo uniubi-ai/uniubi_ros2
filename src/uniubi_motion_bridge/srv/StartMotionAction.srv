@@ -1,0 +1,8 @@
+# Start any action returned by /motion/query_capabilities.
+# params_json is an optional JSON object.
+string action
+string params_json
+---
+bool success
+int32 error_code
+string message

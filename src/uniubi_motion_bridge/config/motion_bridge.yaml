@@ -1,0 +1,36 @@
+uniubi_motion_bridge:
+  ros__parameters:
+    robot_service_name: robotServer
+    event_topic: /robotServer/Event
+    device_id: ""
+    lease_ms: 60000
+    auto_connect: true
+    cmd_vel_topic: /cmd_vel
+    cmd_vel_timeout_ms: 500
+    cmd_vel_rate_hz: 50.0
+    motion_status_topic: /motion/status
+    motion_status_rate_hz: 10.0
+    odom_topic: /odom
+    odom_frame_id: odom
+    base_frame_id: base_link
+    publish_joint_states: true
+    joint_states_topic: /joint_states
+    # MAX fallback used only when getMotorLayout is unavailable. Other models must override it.
+    fallback_limb_sizes: [3, 3, 3, 3]
+    fallback_joint_names:
+      - leftFrontLeg.hip
+      - leftFrontLeg.thigh
+      - leftFrontLeg.calf
+      - rightFrontLeg.hip
+      - rightFrontLeg.thigh
+      - rightFrontLeg.calf
+      - leftRearLeg.hip
+      - leftRearLeg.thigh
+      - leftRearLeg.calf
+      - rightRearLeg.hip
+      - rightRearLeg.thigh
+      - rightRearLeg.calf
+    imu_topic: /imu/data
+    imu_frame_id: imu_link
+    battery_topic: /battery_state
+    battery_publish_rate_hz: 1.0

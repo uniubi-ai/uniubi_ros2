@@ -1,102 +1,183 @@
 # Uniubi ROS 2
 
-Uniubi ROS 2 集成仓库，提供基于 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs) 的 ROS 2 客户端和示例。
+Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、Direct RPC
+调用和原始 DDS topic 接入示例。
 
-本仓库不维护 `.msg` / `.srv` 定义；消息接口统一由 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs) 提供。本仓库也不链接 C++ SDK 的 `librobotMotionSdk.so`，ROS 2 示例通过 `uniubi/srv/System` 直接对接 robotServer 的 DDS/RPC 通道。
+robotServer 原始 `.msg` / `.srv` 定义统一来自
+[`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs)，其 ROS 2 package 名和
+接口类型前缀是 `uniubi`。bridge 专用的 `MotionStatus.msg` 和
+`StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。本仓库不链接
+`librobotMotionSdk.so`；所有模式均通过 ROS 2 service 和 DDS topic 对接 robotServer。
 
-## 目录结构
+## 从这里开始
 
+仓库提供四种使用方式。业务开发默认选择 Motion bridge：
+
+| 使用方式 | 适合谁 | 控制权管理 | 主要接口 | 推荐度 |
+|---|---|---|---|---|
+| Motion bridge | 普通 ROS 2 业务节点 | bridge 自动取权、续约和释放 | `/motion/*`、`/cmd_vel`、标准传感器 topic | 推荐 |
+| `uniubi_motion_client` | 需要更多高级运控能力的 C++ 开发者 |应用显式调用 `connect/startControl/releaseControl` | C++ 方法和回调 | 高级 |
+| Direct RPC | 新增 RPC、验证请求响应协议 | 控制类 RPC 由应用自行管理 | `uniubi/srv/System` | 专家 |
+| Direct DDS topic | 原始数据订阅、QoS 和类型调试 | 只读订阅不需要控制权 | `/motion/observed` 等原始 topic | 专家 |
+
+四种方式的完整优缺点和选型说明见
+[`docs/ros2_usage_modes.md`](docs/ros2_usage_modes.md)。
+
+如果目标只是读取里程计、关节、IMU 或电池，使用 bridge 发布的标准 topic 即可，不需要申请运动控制权。
+
+## 仓库组成
+
+```text
+uniubi_robot_msgs
+└── uniubi                    # ros2/ 构建出的 ROS 2 msg/srv 接口包
+
+uniubi_ros2
+├── uniubi_motion_client      # 源码形式的 RPC/DDS C++ 封装，不是 SDK 动态库
+└── uniubi_motion_bridge      # 面向业务节点的节点及 bridge 专用 msg/srv
 ```
-.
-├── src/
-│   └── uniubi_interface_test/
-│       ├── CMakeLists.txt
-│       ├── package.xml
-│       ├── include/uniubi_interface_test/
-│       ├── src/
-│       └── third_party/jsoncpp/
-├── launch/
-├── rviz/
-└── tests/
+
+bridge 内部复用 `uniubi_motion_client`：
+
+```text
+业务 ROS 2 节点
+  ├── /motion/* services
+  ├── /cmd_vel
+  └── 标准观测 topics
+            ↓
+uniubi_motion_bridge
+            ↓
+uniubi_motion_client
+            ↓
+uniubi/srv/System + DDS topics
+            ↓
+robotServer / MotionServer
 ```
 
 ## 前置条件
 
-- ROS 2 环境已安装并完成 `source`
-- 已构建并 source [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs) 中的 `uniubi` 接口包
-- 客户端与机器人处于同一 DDS Domain 和可发现网络
-- 真实机器人测试前已确认目标 `device_id`
+- ROS 2 Humble 环境已经安装并完成 `source`。
+- 开发机或 Orin 与机器人位于同一可发现网络和 DDS Domain。
+- 已确认目标机器人的 `device_id`。该字段用于 RPC 路由，不能隔离原始 DDS topic。
+- 当前建议每条机器人使用独立的 `ROS_DOMAIN_ID`；不要让多条机器人及其 bridge 共享同一 Domain。
+- 推荐使用 Cyclone DDS。
+
+```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=42
+```
+
+如机器上有多个网卡，还需要通过 `CYCLONEDDS_URI` 明确指定机器人所在网卡。
 
 ## 构建
 
 ```bash
 mkdir -p ~/ros2_ws/src
 
-# 先获取 uniubi_robot_msgs 提供的接口包
 git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
 cp -r ~/uniubi_robot_msgs/ros2 ~/ros2_ws/src/uniubi
 
-# 再放入本仓库 ROS 2 示例包
 git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
-cp -r ~/uniubi_ros2/src/uniubi_interface_test ~/ros2_ws/src/
+cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
+cp -r ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/
 
 cd ~/ros2_ws
-colcon build --packages-select uniubi uniubi_interface_test
+colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
 ```
 
-## 环境配置
+## 推荐方式：Motion bridge
 
-真实机器人联调前必须确认 DDS Domain、RMW 实现和网卡配置。运行示例使用 `UNIUBI_TEST_ROS_DOMAIN_ID` 指定 DDS Domain：
-
-```bash
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-# 如需指定 Cyclone DDS 网卡，可在脚本中生成或引用 CYCLONEDDS_URI
-```
-
-## 运行示例
+启动 bridge：
 
 ```bash
-UNIUBI_TEST_ROS_DOMAIN_ID=42 \
-UNIUBI_TEST_SERVICE_NAME=robotServer \
-UNIUBI_TEST_EVENT_TOPIC=/robotServer/Event \
-UNIUBI_TEST_DEVICE_ID=<device-id> \
-ros2 run uniubi_interface_test motion_high_level_client_test
+ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
+  device_id:=<device-id>
 ```
 
-环境变量：
+bridge 启动后只连接 robotServer，不会立即申请运动控制权。第一次调用
+`/motion/start_action` 时才自动取权并启动续约。
 
-| 变量 | 默认值 | 说明 |
+一个最小控制流程：
+
+```bash
+ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
+  "{action: walking, params_json: '{}'}"
+
+ros2 topic pub --rate 50 /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 0.2, y: 0.0}, angular: {z: 0.0}}'
+
+ros2 service call /motion/stop_action std_srvs/srv/Trigger '{}'
+ros2 service call /motion/release_control std_srvs/srv/Trigger '{}'
+```
+
+`/cmd_vel` 只把速度参数交给当前动作，不会取权、启动动作或切换动作。`linear.y > 0`
+沿用 UniUbi 定义，表示向右横移。
+
+### 对外接口
+
+Services：
+
+```text
+/motion/start_action
+/motion/stop_action
+/motion/release_control
+/motion/emergency_stop
+/motion/query_capabilities
+```
+
+Topics：
+
+```text
+/motion/status
+/cmd_vel
+/odom
+/joint_states
+/imu/data
+/battery_state
+```
+
+接口字段、控制权生命周期、`cmd_vel`、状态更新和动作语义见
+[`docs/motion_bridge.md`](docs/motion_bridge.md)。
+
+## 其他使用方式
+
+- 需要在自己的 C++ 节点中直接调用高级运控方法：使用
+  [`uniubi_motion_client`](docs/ros2_usage_modes.md#方式二uniubi_motion_client-c-客户端)。
+- 需要新增请求/响应接口：使用
+  [Direct RPC](docs/ros2_usage_modes.md#方式三direct-rpc)。
+- 需要订阅原始消息或调试 QoS/类型映射：使用
+  [Direct DDS topic](docs/ros2_usage_modes.md#方式四direct-dds-topic)。
+- 只读订阅原始 Walk 里程计：
+
+```bash
+ROS_DOMAIN_ID=42 \
+UNIUBI_TEST_ODOMETRY_TOPIC=/motion/odometry \
+ros2 run uniubi_motion_client motion_odometry_subscriber
+```
+
+## 文档导航
+
+| 文档 | 面向人群 | 内容 |
 |---|---|---|
-| `UNIUBI_TEST_ROS_DOMAIN_ID` | `42` | DDS Domain ID |
-| `UNIUBI_TEST_SERVICE_NAME` | `robotServer` | ROS 2 service 名称 |
-| `UNIUBI_TEST_EVENT_TOPIC` | `/robotServer/Event` | 事件 topic |
-| `UNIUBI_TEST_DEVICE_ID` | 无 | 目标设备 SN，真实环境必须显式配置 |
+| [README](README.md) | 所有开发者 | 选型、安装和推荐方式快速开始 |
+| [ROS 2 使用方式](docs/ros2_usage_modes.md) | 架构设计与高级开发者 | 四种方式的流程、优缺点和选择建议 |
+| [Motion bridge 使用手册](docs/motion_bridge.md) | 普通业务开发者 | `/motion/*`、`/cmd_vel`、状态和观测接口 |
+| [运行注意事项](docs/runtime_notes.md) | 联调和协议开发者 | DDS、设备匹配、异步语义和安全边界 |
+| [DDS / ROS 2 Direct API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) | 协议开发者 | 原始 RPC、DDS topic 和字段契约 |
+| [ROS 2 与 DDS 映射](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/ros2_dds_interop_overview.md) | 接口维护者 | `.msg/.srv` 与 DDS IDL 映射规则 |
+| [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs) | 消息维护者 | ROS 2 msg/srv 和 DDS IDL 信源 |
 
-`motion_high_level_client_test` 的默认流程为：查询运动能力和系统状态、获取并续约控制权、尝试播放 / 暂停 / 停止音频、查询音频状态、开启再关闭运控观测上报，最后释放控制权。运动动作和原始 TRC 默认由 `kEnableMotionActionDemo=false` 关闭；示例默认不会执行站立、趴下或 walking。打开该开关后，当前测试代码执行 walking 和 TRC 调试，运行前必须确认场地、急停和人工接管条件。
+文档阅读路径的进一步说明见 [`docs/README.md`](docs/README.md)。
 
-## 多设备匹配
+## 安全
 
-同一 DDS Domain 存在多台设备时，运行示例必须填写目标 `device_id`。`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将该字段写入每个 `System.srv` 请求；robotServer 按目标设备 SN 过滤请求，只有匹配设备响应。
+首次实机联调建议先验证只读 topic，再验证站立、趴下等低风险动作。walking、双足、倒立和
+`jump*` 等动作必须在空旷场地、急停可用并有人值守的条件下测试。
 
-字段边界如下：
-
-- `device_id` 是 `uniubi/srv/System` 的显式字段，用于目标设备路由。
-- `Header.msg` 的 `client_id` / `request_id` 来自 `Request.idl`；`System.srv` 不含该 Header 字段。
-
-ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前示例按上述服务端路由契约工作，并检查响应 `code` 和业务 payload；不会额外比较 `response.device_id`。业务代码通常通过封装后的客户端方法发起调用；新增 RPC 时，优先在示例客户端封装层扩展。
-
-## 安全策略
-
-首次真实机器人联调建议只执行站立、趴下等低风险动作。`walking`、`move`、`bipedStand`、`handstand`、`jump*`、`damp` 等高风险运动动作应在空旷场地和人工接管条件下执行。急停、音频播放/暂停/停止、音频文件增删、灯光亮度设置、TRC 归零帧不属于高风险运动动作，但仍需满足接口持权和参数要求。
-
-## 相关文档
-
-- 本仓运行注意事项：[`docs/runtime_notes.md`](docs/runtime_notes.md)
-- DDS / ROS 2 直连接入 API：[`uniubi-docs/docs/uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)
-- ROS 2 与 DDS 映射：[`uniubi-docs/docs/ros2_dds_interop_overview.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/ros2_dds_interop_overview.md)
-- 消息定义仓库：[`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs)
+`stop_action` 不等于释放控制权；业务结束后应显式调用 `/motion/release_control`。
 
 ## 许可证
 
-本仓库中的 UniUbi 原创 ROS 2 集成代码、示例和文档使用 Apache License 2.0。vendored jsoncpp 按其原始许可证授权。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库中的 UniUbi 原创 ROS 2 集成代码、示例和文档使用 Apache License 2.0。vendored
+jsoncpp 按其原始许可证授权。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
