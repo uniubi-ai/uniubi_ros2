@@ -3,21 +3,35 @@
 `uniubi_motion_bridge` 面向普通 ROS 2 业务开发者。业务节点只使用公开 topic/service，不直接
 调用 `uniubi/srv/System`，也不需要链接 SDK 动态库。
 
+> **功能范围：** bridge 当前以常用运动控制为主，并选择性提供里程计、关节、IMU、电池等
+> 标准 ROS 2 观测接口。它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量功能移植。
+> 是否支持某项能力，以本文列出的 topic、service 和参数为准；未列出的系统、音频、媒体、
+> 原始字段或新增协议能力可能尚未移植。
+
 ## 启动
 
 ```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
-. ~/ros2_ws/install/setup.bash
+export ROS_LOCALHOST_ONLY=0
+
+export ROBOT_DEVICE_ID="$(python3 -c \
+  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
-  device_id:=<device-id>
+  device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`device_id` 必须填写，但它只用于 RPC 路由。`/motion/observed`、`/motion/odometry` 和
+`device_id` 必须填写，其值是 `/tmp/deviceInfo` 中的 `deviceNo`（机器人 SN），但它只用于
+RPC 路由。`/motion/observed`、`/motion/odometry` 和
 `/robotServer/Event` 等原始 topic 当前没有可供 bridge 过滤的设备身份；多条机器人共享同一
 DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条机器人使用独立的
 `ROS_DOMAIN_ID`。bridge 启动后只建立连接，不会立即申请高级运动控制权。
+
+如果设备有多个网卡，还必须设置 `CYCLONEDDS_URI`，明确选择机器人所在网卡。
 
 ## Services
 
@@ -159,7 +173,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `device_id` | 空 | 目标设备 ID；共享 Domain 时必须填写 |
+| `device_id` | 空 | 目标机器人 `deviceNo` / SN；必须填写 |
 | `lease_ms` | `60000` | 申请控制权时请求的租约 |
 | `auto_connect` | `true` | 启动后是否自动连接 robotServer |
 | `cmd_vel_timeout_ms` | `500` | ROS 2 速度输入超时 |

@@ -1,7 +1,7 @@
 # Uniubi ROS 2
 
-Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、Direct RPC
-调用和原始 DDS topic 接入示例。
+Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、原始 DDS
+topic 接入和 Direct RPC 调试示例。
 
 robotServer 原始 `.msg` / `.srv` 定义统一来自
 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs)，其 ROS 2 package 名和
@@ -11,17 +11,25 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 
 ## 从这里开始
 
-仓库提供四种使用方式。业务开发默认选择 Motion bridge：
+仓库提供一个默认业务入口和三个按需使用的高级入口。业务开发直接选择 Motion bridge：
 
 | 使用方式 | 适合谁 | 控制权管理 | 主要接口 | 推荐度 |
 |---|---|---|---|---|
 | Motion bridge | 普通 ROS 2 业务节点 | bridge 自动取权、续约和释放 | `/motion/*`、`/cmd_vel`、标准传感器 topic | 推荐 |
 | `uniubi_motion_client` | 需要更多高级运控能力的 C++ 开发者 |应用显式调用 `connect/startControl/releaseControl` | C++ 方法和回调 | 高级 |
-| Direct RPC | 新增 RPC、验证请求响应协议 | 控制类 RPC 由应用自行管理 | `uniubi/srv/System` | 专家 |
-| Direct DDS topic | 原始数据订阅、QoS 和类型调试 | 只读订阅不需要控制权 | `/motion/observed` 等原始 topic | 专家 |
+| Direct DDS topic | 需要完整原始字段的开发者 | 只读订阅不需要控制权 | `/motion/observed` 等原始 topic | 高级 |
+| Direct RPC | 协议维护和请求响应调试 | 控制类 RPC 由应用自行管理 | `uniubi/srv/System` | 协议调试 |
 
 四种方式的完整优缺点和选型说明见
 [`docs/ros2_usage_modes.md`](docs/ros2_usage_modes.md)。
+
+表中的 Direct DDS topic 和 Direct RPC 是为了便于选型而拆开的两个入口，底层都属于同一套
+[DDS / ROS 2 直连接入协议](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)。
+完整协议还包含 Event、控制权生命周期和 TRC，不应把 Direct DDS 理解成只读接口。
+
+> **功能范围：** Motion bridge 当前以常用运动控制为主，并选择性提供里程计、关节、IMU、
+> 电池等标准 ROS 2 观测接口。它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量
+> ROS 2 映射；未在本文接口表中列出的系统、音频、媒体、原始字段或新增协议能力可能尚未移植。
 
 如果目标只是读取里程计、关节、IMU 或电池，使用 bridge 发布的标准 topic 即可，不需要申请运动控制权。
 
@@ -57,7 +65,8 @@ robotServer / MotionServer
 
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 开发机或 Orin 与机器人位于同一可发现网络和 DDS Domain。
-- 已确认目标机器人的 `device_id`。该字段用于 RPC 路由，不能隔离原始 DDS topic。
+- 已确认目标机器人的 `device_id`，其值为设备信息中的 `deviceNo`（机器人 SN）。
+  该字段用于 RPC 路由，不能隔离原始 DDS topic。
 - 当前建议每条机器人使用独立的 `ROS_DOMAIN_ID`；不要让多条机器人及其 bridge 共享同一 Domain。
 - 推荐使用 Cyclone DDS。
 
@@ -90,9 +99,22 @@ colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 启动 bridge：
 
 ```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+export ROBOT_DEVICE_ID="$(python3 -c \
+  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
-  device_id:=<device-id>
+  device_id:="$ROBOT_DEVICE_ID"
 ```
+
+`/tmp/deviceInfo` 由机器人运行环境提供，`deviceNo` 就是 bridge 所需的目标机器人 SN。
+如果设备有多个网卡，还必须按“前置条件”中的说明设置 `CYCLONEDDS_URI`，明确选择机器人
+所在网卡。
 
 bridge 启动后只连接 robotServer，不会立即申请运动控制权。第一次调用
 `/motion/start_action` 时才自动取权并启动续约。
@@ -143,10 +165,10 @@ Topics：
 
 - 需要在自己的 C++ 节点中直接调用高级运控方法：使用
   [`uniubi_motion_client`](docs/ros2_usage_modes.md#方式二uniubi_motion_client-c-客户端)。
-- 需要新增请求/响应接口：使用
-  [Direct RPC](docs/ros2_usage_modes.md#方式三direct-rpc)。
 - 需要订阅原始消息或调试 QoS/类型映射：使用
-  [Direct DDS topic](docs/ros2_usage_modes.md#方式四direct-dds-topic)。
+  [Direct DDS topic](docs/ros2_usage_modes.md#方式三direct-dds-topic)。
+- 需要新增请求/响应接口：使用
+  [Direct RPC](docs/ros2_usage_modes.md#方式四direct-rpc)。
 - 只读订阅原始 Walk 里程计：
 
 ```bash

@@ -1,13 +1,18 @@
 # ROS 2 使用方式与选型
 
-Uniubi ROS 2 提供四种接入方式。它们均不依赖 `librobotMotionSdk.so`，但解决的问题不同：
+Uniubi ROS 2 提供一个默认业务入口和三个按需使用的高级入口。它们均不依赖
+`librobotMotionSdk.so`，但解决的问题不同：
 
-- Motion bridge：完整业务控制和标准 ROS 2 观测接口。
+- Motion bridge：常用运动控制和部分标准 ROS 2 观测接口。
 - `uniubi_motion_client`：自定义 C++ 高级运控流程。
-- Direct RPC：直接处理请求/响应。
 - Direct DDS topic：直接处理持续数据流。
+- Direct RPC：直接处理请求/响应。
 
-RPC 与 DDS topic 在文档中分开说明。只想订阅原始数据的开发者不需要同时理解 RPC 控制权状态机。
+为方便按需求选型，本文把原始 DDS topic 和 Direct RPC 分开说明；它们不是两套独立的底层
+协议，而是完整 DDS / ROS 2 直连接入协议中的不同通道。完整直连还包括 Event、控制权生命周期
+和 TRC，详见
+[`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)。
+只订阅不需要启用 RPC 的原始数据时，开发者无需理解控制权状态机。
 
 ## 选型对比
 
@@ -15,17 +20,22 @@ RPC 与 DDS topic 在文档中分开说明。只想订阅原始数据的开发�
 |---|---|---|---|---|
 | Motion bridge | 业务控制与标准观测 | bridge 自动管理 | 最简单、ROS 2 语义清晰 | 受公开能力范围限制 |
 | `uniubi_motion_client` | 自定义 C++ 高级流程 | client 续约，应用管理生命周期 | 能力完整、仍有统一封装 | 需要正确管理 executor 和收尾 |
-| Direct RPC | 新增或调试请求/响应接口 | 控制类 RPC 必须自行管理 | 最接近 RPC wire contract | JSON、路由、续约和 Event 复杂 |
 | Direct DDS topic | 原始数据与类型/QoS 调试 | 只读订阅不需要 | 无需 RPC，保留完整原始字段 | 需要理解自定义消息、有效位和 QoS |
+| Direct RPC | 新增或调试请求/响应接口 | 控制类 RPC 必须自行管理 | 最接近 RPC wire contract | JSON、路由、续约和 Event 复杂 |
 
 默认选择规则：
 
 - 想控制动作、发送速度并读取状态：Motion bridge。
 - 单个 C++ 进程需要 bridge 尚未开放的能力：`uniubi_motion_client`。
-- 正在新增 service 方法或核对 JSON 请求/响应：Direct RPC。
 - 只需要原始连续数据，或正在定位 DDS 类型/QoS：Direct DDS topic。
+- 正在新增 service 方法或核对 JSON 请求/响应：Direct RPC。
 
 ## 方式一：Motion bridge
+
+Motion bridge 当前以常用运动控制为主，并选择性转换里程计、关节、IMU 和电池等观测数据。
+它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量功能移植。是否支持某项能力，应以
+[Motion bridge 使用手册](motion_bridge.md) 当前列出的 topic、service 和参数为准；系统、音频、
+媒体、原始字段及后续新增的协议能力可能需要使用 `uniubi_motion_client` 或协议直连。
 
 业务节点只与以下公开接口交互：
 
@@ -50,7 +60,7 @@ bridge 是唯一的高级运控客户端，内部完成连接、按需取权、�
 
 缺点：
 
-- 只能使用 bridge 已公开的能力。
+- 以运动控制为主，只能使用 bridge 当前已经公开和转换的能力。
 - `/motion/status` 默认以 10 Hz 查询动作和速度，最多有一个查询周期的显示延迟。
 - `/cmd_vel` 没有逐条响应，最近失败通过 `/motion/status` 反映。
 
@@ -99,7 +109,37 @@ ros2 run uniubi_motion_client motion_high_level_client_example
 
 示例中的真实运动默认关闭，构建或启动成功不代表实机动作已经验证。
 
-## 方式三：Direct RPC
+## 方式三：Direct DDS topic
+
+应用直接订阅原始数据 topic，不经过 bridge 的标准消息转换。常用入口包括：
+
+```text
+/motion/observed
+/motion/odometry
+/sensor/observed
+/robotServer/Event
+```
+
+这条路径主要用于持续数据流。`/motion/odometry` 可以直接订阅，不需要申请控制权；
+`/motion/observed` 和 `/sensor/observed` 默认关闭，需要先建立 reader，再通过 RPC 调用
+`setMotionObservedEnable` 开启，但该启用调用不要求持有运动控制权。
+
+优点：
+
+- 只读数据订阅不需要运动控制权；里程计也不需要额外的启用 RPC。
+- 保留设备错误码、有效位、原始时间戳和生命周期字段。
+- 适合验证 DDS 发现、消息类型、发布频率和 QoS。
+
+缺点：
+
+- 使用 UniUbi 自定义消息，而不是全部转换为社区标准消息。
+- 调用方需要正确设置 reliability、history depth 和 durability。
+- 原始时间戳、坐标和字段语义需要按协议解释。
+
+`/motion/trc` 是控制 topic，不属于普通只读数据流。直接发布 TRC 需要已有控制会话、正确的
+控制 ID 和持续发送约束；普通业务应使用 bridge 或 client。
+
+## 方式四：Direct RPC
 
 应用直接使用 `uniubi/srv/System` 调用 robotServer。它适合查询能力、查询状态、验证新 RPC，
 以及定位问题发生在业务封装、client 还是 robotServer。
@@ -131,35 +171,6 @@ takeMotionControl
 Direct RPC 的契约以
 [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)
 为准。普通业务开发者不应直接拼装控制 RPC。
-
-## 方式四：Direct DDS topic
-
-应用直接订阅原始数据 topic，不经过 bridge 的标准消息转换。常用入口包括：
-
-```text
-/motion/observed
-/motion/odometry
-/sensor/observed
-/robotServer/Event
-```
-
-这条路径主要用于持续数据流，不要求同时调用 `System.srv`。例如订阅
-`/motion/odometry` 不申请控制权。
-
-优点：
-
-- 原始数据订阅不需要 RPC 控制状态机。
-- 保留设备错误码、有效位、原始时间戳和生命周期字段。
-- 适合验证 DDS 发现、消息类型、发布频率和 QoS。
-
-缺点：
-
-- 使用 UniUbi 自定义消息，而不是全部转换为社区标准消息。
-- 调用方需要正确设置 reliability、history depth 和 durability。
-- 原始时间戳、坐标和字段语义需要按协议解释。
-
-`/motion/trc` 是控制 topic，不属于普通只读数据流。直接发布 TRC 需要已有控制会话、正确的
-控制 ID 和持续发送约束；普通业务应使用 bridge 或 client。
 
 ## 只读使用
 

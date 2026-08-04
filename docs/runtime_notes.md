@@ -2,16 +2,6 @@
 
 本文记录使用 `uniubi_motion_client` 和 `uniubi_motion_bridge` 二次开发时容易踩坑的 ROS 2 集成行为。完整 DDS / ROS 2 协议说明统一维护在 [uniubi-docs](https://github.com/uniubi-ai/uniubi-docs)。
 
-## Direct RPC 范围
-
-本仓不链接 `librobotMotionSdk.so`。Direct RPC 通过 `uniubi/srv/System` 对接 robotServer：
-
-- RPC service：`uniubi/srv/System`
-- 异步控制事件：`/robotServer/Event`
-
-只读查询不需要控制权。直接执行控制 RPC 时，调用方必须自行处理取权、续约、Event 和释放。
-Direct RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ 或 Python SDK runtime 链路可用。
-
 ## Direct DDS topic 范围
 
 原始持续数据通过 DDS/ROS 2 topic 提供：
@@ -25,6 +15,16 @@ Direct RPC 测试通过只说明请求/响应契约和路由可用，不能代�
 DDS 发现和 QoS 链路可用。
 
 `/motion/odometry` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，不受 `setMotionObservedEnable()` 控制。订阅不需要 High Level 控制权；显式 reset 需要控制权。里程计仅在 Walk 模式有效，切换到其他动作后 `position` / `yaw` 清零、`epoch` 递增且 `valid=false`。
+
+## Direct RPC 范围
+
+本仓不链接 `librobotMotionSdk.so`。Direct RPC 通过 `uniubi/srv/System` 对接 robotServer：
+
+- RPC service：`uniubi/srv/System`
+- 异步控制事件：`/robotServer/Event`
+
+只读查询不需要控制权。直接执行控制 RPC 时，调用方必须自行处理取权、续约、Event 和释放。
+Direct RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ 或 Python SDK runtime 链路可用。
 
 ## Motion bridge 速度安全边界
 
