@@ -11,7 +11,10 @@
 - Sensor observation topic：`/sensor/observed`
 - 原始控制 topic：`/motion/trc`（不是普通只读数据流）
 
-订阅前三类观测 topic 不要求同时调用 `System.srv`。Direct DDS topic 测试通过只说明消息类型、
+订阅这些观测 topic 不要求持有 High Level 控制权。其中 `/motion/odometry` 可直接订阅；
+`/motion/observed` 和 `/sensor/observed` 默认关闭，Direct DDS 使用者必须先建立 reader，
+再通过无需运动控制权的 RPC 调用 `setMotionObservedEnable()` 开启。Motion bridge 会自动管理
+原始观测流，其业务节点只需订阅 bridge 发布的标准 ROS 2 topic。Direct DDS topic 测试通过只说明消息类型、
 DDS 发现和 QoS 链路可用。
 
 `/motion/odometry` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，不受 `setMotionObservedEnable()` 控制。订阅不需要 High Level 控制权；显式 reset 需要控制权。里程计仅在 Walk 模式有效，切换到其他动作后 `position` / `yaw` 清零、`epoch` 递增且 `valid=false`。
