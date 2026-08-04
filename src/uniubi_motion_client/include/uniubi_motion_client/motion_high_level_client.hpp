@@ -1,5 +1,5 @@
-#ifndef UNIUBI_INTERFACE_TEST__MOTION_HIGH_LEVEL_CLIENT_HPP_
-#define UNIUBI_INTERFACE_TEST__MOTION_HIGH_LEVEL_CLIENT_HPP_
+#ifndef UNIUBI_MOTION_CLIENT__MOTION_HIGH_LEVEL_CLIENT_HPP_
+#define UNIUBI_MOTION_CLIENT__MOTION_HIGH_LEVEL_CLIENT_HPP_
 
 #include <chrono>
 #include <cstdint>
@@ -10,10 +10,12 @@
 #include "json/json.h"
 #include "rclcpp/rclcpp.hpp"
 #include "uniubi/msg/event_message.hpp"
+#include "uniubi/msg/motion_observed.hpp"
+#include "uniubi/msg/motion_odometry.hpp"
 #include "uniubi/msg/remote_control.hpp"
-#include "uniubi_interface_test/system_rpc_client_base.hpp"
+#include "uniubi_motion_client/system_rpc_client_base.hpp"
 
-namespace uniubi_interface_test
+namespace uniubi_motion_client
 {
 
 /**
@@ -104,6 +106,12 @@ public:
   /// 业务事件回调。robotServer.host.event 会被解包后传入内层业务 topic 和 detail JSON。
   using EventCallback = std::function<void(const std::string & topic, const std::string & payload_json)>;
 
+  /// Walk 平面里程计回调。仅订阅数据，不申请控制权。
+  using MotionOdometryCallback = std::function<void(const uniubi::msg::MotionOdometry & odometry)>;
+
+  /// 电机与 IMU 运控观测回调。仅订阅数据，不申请控制权。
+  using MotionObservedCallback = std::function<void(const uniubi::msg::MotionObserved & observed)>;
+
   /**
    * @brief 创建高级运动控制客户端。
    * @param node ROS 2 节点。
@@ -117,7 +125,9 @@ public:
     rclcpp::Executor & executor,
     const std::string & ros_service_name,
     const std::string & device_id = "",
-    const std::string & event_topic = "/robotServer/Event");
+    const std::string & event_topic = "/robotServer/Event",
+    const std::string & odometry_topic = "/motion/odometry",
+    const std::string & motion_observed_topic = "/motion/observed");
 
   ~MotionHighLevelClient() override;
 
@@ -156,6 +166,12 @@ public:
   /// 注册业务事件回调。应在 connect() 前设置。
   void setEventCallback(EventCallback cb);
 
+  /// 注册 Walk 里程计回调。必须在 connect() 前设置，不需要控制权。
+  void setMotionOdometryCallback(MotionOdometryCallback cb);
+
+  /// 注册电机与 IMU 运控观测回调。必须在 connect() 前设置，不需要控制权。
+  void setMotionObservedCallback(MotionObservedCallback cb);
+
   /// 查询运动能力列表。已 connect 即可调用，不要求持有控制权。
   bool queryCapabilities(std::string & out, int32_t timeout_ms = 5000);
 
@@ -164,6 +180,9 @@ public:
 
   /// 查询当前运动状态。已 connect 即可调用。
   bool queryMotionState(std::string & out, int32_t timeout_ms = 5000);
+
+  /// 查询电机硬件布局。已 connect 即可调用，返回 motorNum/motors JSON。
+  bool queryMotorLayout(std::string & out, int32_t timeout_ms = 5000);
 
   /**
    * @brief 启动高级动作。
@@ -195,6 +214,9 @@ public:
 
   /// 急停。必须持有控制权。
   bool emergencyStop(int32_t timeout_ms = 5000);
+
+  /// 清零 Walk 里程计并返回包含新 epoch 的 JSON。必须持有控制权。
+  bool resetMotionOdometry(std::string & out, int32_t timeout_ms = 5000);
 
   /// 开关运控/传感器观测量推送。已 connect 即可调用，不强制要求持有控制权。
   bool setMotionObservedEnable(bool motion_enable, bool sensor_enable = false, int32_t timeout_ms = 5000);
@@ -234,6 +256,8 @@ public:
 
 private:
   using EventMessage = uniubi::msg::EventMessage;
+  using MotionObserved = uniubi::msg::MotionObserved;
+  using MotionOdometry = uniubi::msg::MotionOdometry;
   using RemoteControl = uniubi::msg::RemoteControl;
 
   bool ensure_connected();
@@ -297,12 +321,22 @@ private:
   /// 销毁事件订阅。
   void destroy_event_subscription();
 
+  void create_odometry_subscription();
+
+  void destroy_odometry_subscription();
+
+  void create_motion_observed_subscription();
+
+  void destroy_motion_observed_subscription();
+
   /// 处理 EventMessage，包含 magic 校验、host.event 解包和 control.status 失权处理。
   void handle_event(const EventMessage & event);
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::Executor & executor_;
   rclcpp::Subscription<EventMessage>::SharedPtr event_subscription_;
+  rclcpp::Subscription<MotionOdometry>::SharedPtr odometry_subscription_;
+  rclcpp::Subscription<MotionObserved>::SharedPtr motion_observed_subscription_;
   rclcpp::Publisher<RemoteControl>::SharedPtr raw_control_publisher_;
   rclcpp::TimerBase::SharedPtr renew_timer_;
   std::optional<std::int64_t> pending_renew_request_id_;
@@ -310,6 +344,8 @@ private:
   std::chrono::steady_clock::time_point last_renew_at_;
   std::uint64_t renew_sequence_;
   std::string event_topic_;
+  std::string odometry_topic_;
+  std::string motion_observed_topic_;
   std::string controller_;
   std::uint64_t raw_action_id_;
   std::uint64_t raw_control_seq_;
@@ -318,8 +354,10 @@ private:
   mutable HighLevelError last_error_;
   ConnectCallback connect_callback_;
   EventCallback event_callback_;
+  MotionOdometryCallback odometry_callback_;
+  MotionObservedCallback motion_observed_callback_;
 };
 
-}  // namespace uniubi_interface_test
+}  // namespace uniubi_motion_client
 
-#endif  // UNIUBI_INTERFACE_TEST__MOTION_HIGH_LEVEL_CLIENT_HPP_
+#endif  // UNIUBI_MOTION_CLIENT__MOTION_HIGH_LEVEL_CLIENT_HPP_

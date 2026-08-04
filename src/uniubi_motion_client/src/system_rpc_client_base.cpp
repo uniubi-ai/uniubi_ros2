@@ -1,4 +1,4 @@
-#include "uniubi_interface_test/system_rpc_client_base.hpp"
+#include "uniubi_motion_client/system_rpc_client_base.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -9,7 +9,7 @@
 
 #include "json/json.h"
 
-namespace uniubi_interface_test
+namespace uniubi_motion_client
 {
 
 namespace
@@ -278,4 +278,4 @@ std::string SystemRpcClientBase::make_client_id(const rclcpp::Node::SharedPtr & 
   return stream.str();
 }
 
-}  // namespace uniubi_interface_test
+}  // namespace uniubi_motion_client
