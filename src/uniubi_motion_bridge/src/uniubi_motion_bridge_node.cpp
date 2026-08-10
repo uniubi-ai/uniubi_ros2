@@ -538,6 +538,7 @@ private:
     }
     message.current_action = current_action_;
     message.line_velocity_x = current_linear_x_;
+    // Both ROS REP-103 and the UniUbi motion interface define +Y as left.
     message.line_velocity_y = current_linear_y_;
     message.angular_velocity = current_angular_z_;
     message.last_error_code = last_error_code_;
@@ -603,7 +604,7 @@ private:
 
     VelocityCommand command;
     command.linear_x = x;
-    // Deliberately preserve the UniUbi convention: positive Y means moving right.
+    // Both ROS REP-103 and the UniUbi motion interface define +Y as left.
     command.linear_y = y;
     command.angular_z = yaw;
     command.received_at = std::chrono::steady_clock::now();
@@ -640,7 +641,7 @@ private:
     constexpr double kZeroEpsilon = 1.0e-6;
     Json::Value params(Json::objectValue);
     params["lineVelocityX"] = command.linear_x;
-    // Deliberately preserve the UniUbi convention: positive Y means moving right.
+    // No lateral sign conversion is required at the ROS/SDK boundary.
     params["lineVelocityY"] = command.linear_y;
     params["velocity"] = command.angular_z;
     const bool any_nonzero = std::abs(command.linear_x) > kZeroEpsilon ||
