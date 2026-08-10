@@ -7,6 +7,7 @@ builtin_interfaces/Time stamp
 uint8 control_state
 string current_action
 float32 line_velocity_x
+# ROS REP-103 lateral velocity: positive is left, negative is right.
 float32 line_velocity_y
 float32 angular_velocity
 int32 last_error_code

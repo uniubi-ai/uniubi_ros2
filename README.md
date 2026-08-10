@@ -131,8 +131,9 @@ ros2 service call /motion/stop_action std_srvs/srv/Trigger '{}'
 ros2 service call /motion/release_control std_srvs/srv/Trigger '{}'
 ```
 
-`/cmd_vel` 只把速度参数交给当前动作，不会取权、启动动作或切换动作。`linear.y > 0`
-沿用 UniUbi 定义，表示向右横移。
+`/cmd_vel` 只把速度参数交给当前动作，不会取权、启动动作或切换动作。按 ROS
+REP-103 和 UniUbi 运动接口的共同约定，`linear.y > 0` 表示向左横移，bridge
+不做符号转换。
 
 ### 对外接口
 

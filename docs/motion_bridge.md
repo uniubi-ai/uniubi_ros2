@@ -105,7 +105,8 @@ bridge 不为 standing、laying、walking 等动作分别创建 service。动作
 | `linear.y` | `lineVelocityY` |
 | `angular.z` | `velocity` |
 
-`linear.y > 0` 沿用 UniUbi 的“向右”定义，不按 REP-103 取反。
+`linear.y` 和 UniUbi `lineVelocityY` 都遵循“正左负右”定义，bridge 不做
+符号转换。`/motion/status.line_velocity_y` 也使用相同方向定义。
 
 bridge 不根据 `/motion/status` 判断当前动作，也不在 bridge 内按动作范围限幅。它把三个有限数值
 直接交给 `setActionParams`，鉴权、动作参数匹配和安全限制由 client/服务端处理。因此
@@ -165,6 +166,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 - IMU 加速度或角速度无效时不发布；四元数无效时将 `orientation_covariance[0]` 设为 `-1`。
 - `BatteryState.percentage` 把设备 0-100 电量换算为 ROS 2 的 0-1。
 - `/odom` 使用设备端已累计的 position/yaw，上层不能再次积分，当前不发布 TF。
+  里程计的 `position.y` 和 `twist.linear.y` 同样使用“正左负右”，bridge 原样发布。
 
 完整原始错误码、在线状态、温度和里程计生命周期字段仍以 `/motion/observed`、
 `/motion/odometry` 为准。
