@@ -41,6 +41,10 @@ namespace
 
 using MotionClient = uniubi_motion_client::MotionHighLevelClient;
 
+constexpr auto kConnectReadinessTimeout = std::chrono::seconds(5);
+constexpr auto kConnectReadinessRetryInterval = std::chrono::milliseconds(200);
+constexpr int32_t kConnectReadinessRpcTimeoutMs = 500;
+
 volatile std::sig_atomic_t shutdown_requested = 0;
 
 void handle_signal(int)
@@ -300,7 +304,9 @@ private:
       }
       enforce_cmd_vel_watchdog();
       client_executor_->spin_some();
-      update_motion_status();
+      if (rpc_ready_) {
+        update_motion_status();
+      }
     }
 
     if (motion_client_) {
@@ -309,6 +315,7 @@ private:
       }
       disable_motion_observed();
       motion_client_->disconnect();
+      rpc_ready_ = false;
       current_action_.clear();
       current_linear_x_ = current_linear_y_ = current_angular_z_ = 0.0F;
       publish_motion_status();
@@ -334,20 +341,62 @@ private:
 
   CommandResult connect_client()
   {
-    if (motion_client_->getState() != MotionClient::kDisconnected) {
+    if (motion_client_->getState() != MotionClient::kDisconnected && rpc_ready_) {
       return {true, MotionClient::kNone, state_name(motion_client_->getState())};
     }
-    const bool success = motion_client_->connect(lease_ms_);
-    const auto error = success ? MotionClient::kNone : motion_client_->getLastError();
-    if (success) {
-      configure_joint_states();
-      clear_status_error();
-      next_motion_status_query_at_ = {};
-    } else {
-      set_status_error(error, "connect failed");
+
+    if (motion_client_->getState() == MotionClient::kDisconnected) {
+      rpc_ready_ = false;
+      if (!motion_client_->connect(lease_ms_)) {
+        const auto error = motion_client_->getLastError();
+        set_status_error(error, "connect failed");
+        publish_motion_status();
+        return {false, error, "connect failed"};
+      }
     }
+
+    if (!wait_for_rpc_ready()) {
+      auto error = motion_client_->getLastError();
+      if (error == MotionClient::kNone) {
+        error = MotionClient::kRpcConnectFailed;
+      }
+      set_status_error(error, "connect readiness check timed out");
+      publish_motion_status();
+      return {false, error, "connect readiness check timed out"};
+    }
+
+    rpc_ready_ = true;
+    configure_joint_states();
+    clear_status_error();
+    next_motion_status_query_at_ = {};
     publish_motion_status();
-    return {success, error, success ? "connected" : "connect failed"};
+    return {true, MotionClient::kNone, "connected"};
+  }
+
+  bool wait_for_rpc_ready()
+  {
+    const auto deadline = std::chrono::steady_clock::now() + kConnectReadinessTimeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+      const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now());
+      const auto rpc_timeout_ms = std::max<int32_t>(
+        1, std::min<int32_t>(
+          kConnectReadinessRpcTimeoutMs, static_cast<int32_t>(remaining.count())));
+
+      std::string ignored;
+      if (motion_client_->queryCapabilities(ignored, rpc_timeout_ms)) {
+        return true;
+      }
+
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        break;
+      }
+      std::this_thread::sleep_for(std::min(
+        kConnectReadinessRetryInterval,
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)));
+    }
+    return false;
   }
 
   CommandResult acquire_control(bool & acquired_now)
@@ -524,17 +573,21 @@ private:
   {
     uniubi_motion_bridge::msg::MotionStatus message;
     message.stamp = now();
-    switch (motion_client_->getState()) {
-      case MotionClient::kControlled:
-        message.control_state = uniubi_motion_bridge::msg::MotionStatus::CONTROLLED;
-        break;
-      case MotionClient::kConnected:
-        message.control_state = uniubi_motion_bridge::msg::MotionStatus::CONNECTED;
-        break;
-      case MotionClient::kDisconnected:
-      default:
-        message.control_state = uniubi_motion_bridge::msg::MotionStatus::DISCONNECTED;
-        break;
+    if (!rpc_ready_) {
+      message.control_state = uniubi_motion_bridge::msg::MotionStatus::DISCONNECTED;
+    } else {
+      switch (motion_client_->getState()) {
+        case MotionClient::kControlled:
+          message.control_state = uniubi_motion_bridge::msg::MotionStatus::CONTROLLED;
+          break;
+        case MotionClient::kConnected:
+          message.control_state = uniubi_motion_bridge::msg::MotionStatus::CONNECTED;
+          break;
+        case MotionClient::kDisconnected:
+        default:
+          message.control_state = uniubi_motion_bridge::msg::MotionStatus::DISCONNECTED;
+          break;
+      }
     }
     message.current_action = current_action_;
     message.line_velocity_x = current_linear_x_;
@@ -554,7 +607,7 @@ private:
     }
     next_motion_status_query_at_ = now_steady + motion_status_publish_period_;
 
-    if (motion_client_->getState() == MotionClient::kDisconnected) {
+    if (!rpc_ready_ || motion_client_->getState() == MotionClient::kDisconnected) {
       return;
     }
 
@@ -1057,6 +1110,7 @@ private:
   bool velocity_watchdog_fired_{false};
   std::vector<MotorLayoutEntry> motor_layout_;
   bool motion_observed_enabled_{false};
+  bool rpc_ready_{false};
   std::chrono::steady_clock::time_point next_battery_publish_at_{};
   std::chrono::milliseconds battery_publish_period_{1000};
   std::chrono::steady_clock::time_point next_motion_status_query_at_{};
