@@ -26,7 +26,7 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
 ```
 
 `device_id` 必须填写，其值是 `/tmp/deviceInfo` 中的 `deviceNo`（机器人 SN），但它只用于
-RPC 路由。`/motion/observed`、`/motion/odometry` 和
+RPC 路由。`/motion/observed`、`/sensor/observed` 和
 `/robotServer/Event` 等原始 topic 当前没有可供 bridge 过滤的设备身份；多条机器人共享同一
 DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条机器人使用独立的
 `ROS_DOMAIN_ID`。bridge 启动后只建立连接，不会立即申请高级运动控制权。
@@ -168,8 +168,8 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 - `/odom` 使用设备端已累计的 position/yaw，上层不能再次积分，当前不发布 TF。
   里程计的 `position.y` 和 `twist.linear.y` 同样使用“正左负右”，bridge 原样发布。
 
-完整原始错误码、在线状态、温度和里程计生命周期字段仍以 `/motion/observed`、
-`/motion/odometry` 为准。
+完整原始错误码、在线状态和温度仍以 `/motion/observed` 为准，里程计生命周期字段以
+`/sensor/observed` 中的 `odom` 为准。
 
 ## 主要参数
 

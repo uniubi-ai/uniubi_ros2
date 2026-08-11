@@ -11,8 +11,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "uniubi/msg/event_message.hpp"
 #include "uniubi/msg/motion_observed.hpp"
-#include "uniubi/msg/motion_odometry.hpp"
 #include "uniubi/msg/remote_control.hpp"
+#include "uniubi/msg/sensor_observed.hpp"
 #include "uniubi_motion_client/system_rpc_client_base.hpp"
 
 namespace uniubi_motion_client
@@ -106,8 +106,8 @@ public:
   /// 业务事件回调。robotServer.host.event 会被解包后传入内层业务 topic 和 detail JSON。
   using EventCallback = std::function<void(const std::string & topic, const std::string & payload_json)>;
 
-  /// Walk 平面里程计回调。仅订阅数据，不申请控制权。
-  using MotionOdometryCallback = std::function<void(const uniubi::msg::MotionOdometry & odometry)>;
+  /// GPS、UWB 与 Walk 里程计统一传感器观测回调。仅订阅数据，不申请控制权。
+  using SensorObservedCallback = std::function<void(const uniubi::msg::SensorObserved & observed)>;
 
   /// 电机与 IMU 运控观测回调。仅订阅数据，不申请控制权。
   using MotionObservedCallback = std::function<void(const uniubi::msg::MotionObserved & observed)>;
@@ -126,7 +126,7 @@ public:
     const std::string & ros_service_name,
     const std::string & device_id = "",
     const std::string & event_topic = "/robotServer/Event",
-    const std::string & odometry_topic = "/motion/odometry",
+    const std::string & sensor_observed_topic = "/sensor/observed",
     const std::string & motion_observed_topic = "/motion/observed");
 
   ~MotionHighLevelClient() override;
@@ -166,8 +166,8 @@ public:
   /// 注册业务事件回调。应在 connect() 前设置。
   void setEventCallback(EventCallback cb);
 
-  /// 注册 Walk 里程计回调。必须在 connect() 前设置，不需要控制权。
-  void setMotionOdometryCallback(MotionOdometryCallback cb);
+  /// 注册完整传感器观测回调。必须在 connect() 前设置，不需要控制权。
+  void setSensorObservedCallback(SensorObservedCallback cb);
 
   /// 注册电机与 IMU 运控观测回调。必须在 connect() 前设置，不需要控制权。
   void setMotionObservedCallback(MotionObservedCallback cb);
@@ -215,9 +215,6 @@ public:
   /// 急停。必须持有控制权。
   bool emergencyStop(int32_t timeout_ms = 5000);
 
-  /// 清零 Walk 里程计并返回包含新 epoch 的 JSON。必须持有控制权。
-  bool resetMotionOdometry(std::string & out, int32_t timeout_ms = 5000);
-
   /// 开关运控/传感器观测量推送。已 connect 即可调用，不强制要求持有控制权。
   bool setMotionObservedEnable(bool motion_enable, bool sensor_enable = false, int32_t timeout_ms = 5000);
 
@@ -257,6 +254,7 @@ public:
 private:
   using EventMessage = uniubi::msg::EventMessage;
   using MotionObserved = uniubi::msg::MotionObserved;
+  using SensorObserved = uniubi::msg::SensorObserved;
   using MotionOdometry = uniubi::msg::MotionOdometry;
   using RemoteControl = uniubi::msg::RemoteControl;
 
@@ -321,9 +319,9 @@ private:
   /// 销毁事件订阅。
   void destroy_event_subscription();
 
-  void create_odometry_subscription();
+  void create_sensor_observed_subscription();
 
-  void destroy_odometry_subscription();
+  void destroy_sensor_observed_subscription();
 
   void create_motion_observed_subscription();
 
@@ -335,7 +333,7 @@ private:
   rclcpp::Node::SharedPtr node_;
   rclcpp::Executor & executor_;
   rclcpp::Subscription<EventMessage>::SharedPtr event_subscription_;
-  rclcpp::Subscription<MotionOdometry>::SharedPtr odometry_subscription_;
+  rclcpp::Subscription<SensorObserved>::SharedPtr sensor_observed_subscription_;
   rclcpp::Subscription<MotionObserved>::SharedPtr motion_observed_subscription_;
   rclcpp::Publisher<RemoteControl>::SharedPtr raw_control_publisher_;
   rclcpp::TimerBase::SharedPtr renew_timer_;
@@ -344,7 +342,7 @@ private:
   std::chrono::steady_clock::time_point last_renew_at_;
   std::uint64_t renew_sequence_;
   std::string event_topic_;
-  std::string odometry_topic_;
+  std::string sensor_observed_topic_;
   std::string motion_observed_topic_;
   std::string controller_;
   std::uint64_t raw_action_id_;
@@ -354,7 +352,7 @@ private:
   mutable HighLevelError last_error_;
   ConnectCallback connect_callback_;
   EventCallback event_callback_;
-  MotionOdometryCallback odometry_callback_;
+  SensorObservedCallback sensor_observed_callback_;
   MotionObservedCallback motion_observed_callback_;
 };
 

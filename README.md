@@ -177,12 +177,12 @@ Topics：
   [`uniubi_motion_client`](docs/ros2_usage_modes.md#方式二uniubi_motion_client-c-客户端)。
 - 需要订阅原始消息、调试 QoS/类型映射或新增协议接口：使用
   [DDS / ROS 2 协议直连](docs/ros2_usage_modes.md#方式三dds--ros-2-协议直连)。
-- 只读订阅原始 Walk 里程计：
+- 只读订阅完整传感器观测（GPS、UWB、Walk 里程计）：
 
 ```bash
 ROS_DOMAIN_ID=42 \
-UNIUBI_TEST_ODOMETRY_TOPIC=/motion/odometry \
-ros2 run uniubi_motion_client motion_odometry_subscriber
+UNIUBI_TEST_SENSOR_OBSERVED_TOPIC=/sensor/observed \
+ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
 ## 文档导航
