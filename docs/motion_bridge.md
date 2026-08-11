@@ -31,6 +31,12 @@ RPC 路由。`/motion/observed`、`/motion/odometry` 和
 DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条机器人使用独立的
 `ROS_DOMAIN_ID`。bridge 启动后只建立连接，不会立即申请高级运动控制权。
 
+bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()` 成功后，bridge 会在
+5 秒总超时内用只读、无副作用的 `getMotionCapabilities` 检查双向 RPC 链路，单次 RPC
+最长等待 500 ms，失败后间隔 200 ms 重试。首次收到成功响应后，才启用运动观测和状态查询，
+并在 `/motion/status` 中报告 `CONNECTED`。如果本次就绪检查超时，bridge 不主动断开 SDK
+连接；后续 service 请求会重新执行一轮有限时的就绪检查。
+
 如果设备有多个网卡，还必须设置 `CYCLONEDDS_URI`，明确选择机器人所在网卡。
 
 ## Services
