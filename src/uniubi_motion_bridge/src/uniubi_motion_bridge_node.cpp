@@ -232,9 +232,9 @@ public:
         RCLCPP_DEBUG(
           get_logger(), "robotServer event [%s]: %s", topic.c_str(), payload_json.c_str());
       });
-    motion_client_->setMotionOdometryCallback(
-      [this](const uniubi::msg::MotionOdometry & odometry) {
-        publish_odometry(odometry);
+    motion_client_->setSensorObservedCallback(
+      [this](const uniubi::msg::SensorObserved & sensor) {
+        publish_odometry(sensor.odom);
       });
     motion_client_->setMotionObservedCallback(
       [this](const uniubi::msg::MotionObserved & observed) {
@@ -908,7 +908,7 @@ private:
         }
       }
     }
-    if (!motion_client_->setMotionObservedEnable(true, false, 3000)) {
+    if (!motion_client_->setMotionObservedEnable(true, true, 3000)) {
       const auto error = motion_client_->getLastError();
       RCLCPP_WARN(
         get_logger(), "motion observation topics disabled because observation could not be enabled (error=%d)",

@@ -29,15 +29,23 @@ ament_target_dependencies(motion_high_level_client_example
 )
 target_link_libraries(motion_high_level_client_example motion_high_level_client)
 
-add_executable(motion_odometry_subscriber src/motion_odometry_subscriber.cpp)
-ament_target_dependencies(motion_odometry_subscriber
+add_executable(motion_high_level_client_cli src/motion_high_level_client_cli.cpp)
+ament_target_dependencies(motion_high_level_client_cli
+  rclcpp
+  uniubi
+)
+target_link_libraries(motion_high_level_client_cli motion_high_level_client)
+
+add_executable(sensor_observed_subscriber src/sensor_observed_subscriber.cpp)
+ament_target_dependencies(sensor_observed_subscriber
   rclcpp
   uniubi
 )
 
 install(TARGETS
   motion_high_level_client_example
-  motion_odometry_subscriber
+  motion_high_level_client_cli
+  sensor_observed_subscriber
   DESTINATION lib/${PROJECT_NAME}
 )
 

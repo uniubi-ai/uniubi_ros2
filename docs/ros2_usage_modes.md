@@ -111,7 +111,7 @@ ros2 run uniubi_motion_client motion_high_level_client_example
 ```text
 RPC 请求/响应       查询、配置、控制权和动作控制
 Event               设备主动推送的状态变化
-数据 topic           observed、odometry、sensor
+数据 topic           motion observed、sensor observed
 TRC 控制 topic       高频实时控制帧
 ```
 
@@ -124,17 +124,16 @@ TRC 控制 topic       高频实时控制帧
 
 ```text
 /motion/observed
-/motion/odometry
 /sensor/observed
 ```
 
-这条路径主要用于持续数据流。`/motion/odometry` 可以直接订阅，不需要申请控制权；
-`/motion/observed` 和 `/sensor/observed` 默认关闭，需要先建立 reader，再通过 RPC 调用
+这条路径主要用于持续数据流。`/motion/observed` 和 `/sensor/observed` 默认关闭，
+需要先建立 reader，再通过 RPC 调用
 `setMotionObservedEnable` 开启，但该启用调用不要求持有运动控制权。
 
 优点：
 
-- 只读数据订阅不需要运动控制权；里程计也不需要额外的启用 RPC。
+- 只读数据订阅不需要运动控制权；里程计通过 `SensorObserved.odom` 获取。
 - 保留设备错误码、有效位、原始时间戳和生命周期字段。
 - 适合验证 DDS 发现、消息类型、发布频率和 QoS。
 

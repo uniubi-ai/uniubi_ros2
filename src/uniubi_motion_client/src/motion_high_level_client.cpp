@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include "json/json.h"
@@ -79,7 +80,7 @@ MotionHighLevelClient::MotionHighLevelClient(
   const std::string & ros_service_name,
   const std::string & device_id,
   const std::string & event_topic,
-  const std::string & odometry_topic,
+  const std::string & sensor_observed_topic,
   const std::string & motion_observed_topic)
 : SystemRpcClientBase(node, ros_service_name, device_id),
   node_(node),
@@ -89,7 +90,7 @@ MotionHighLevelClient::MotionHighLevelClient(
   last_renew_at_(std::chrono::steady_clock::now()),
   renew_sequence_(0),
   event_topic_(event_topic),
-  odometry_topic_(odometry_topic),
+  sensor_observed_topic_(sensor_observed_topic),
   motion_observed_topic_(motion_observed_topic),
   raw_action_id_(0),
   raw_control_seq_(1),
@@ -115,13 +116,16 @@ bool MotionHighLevelClient::connect(int32_t lease_ms)
     return false;
   }
 
+  // RobotServer may announce the request endpoint slightly before its response
+  // writer has matched this new client. Give the reverse path a short settling
+  // window before issuing the first synchronous RPC.
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
   lease_ms_ = lease_ms > 0 ? lease_ms : kDefaultLeaseMs;
   controller_.clear();
   raw_action_id_ = 0;
   raw_control_seq_ = 1;
   create_event_subscription();
-  create_odometry_subscription();
-  create_motion_observed_subscription();
   set_error(kNone);
   state_ = kConnected;
   return true;
@@ -135,7 +139,7 @@ void MotionHighLevelClient::disconnect()
 
   stop_renew_timer();
   destroy_event_subscription();
-  destroy_odometry_subscription();
+  destroy_sensor_observed_subscription();
   destroy_motion_observed_subscription();
   raw_control_publisher_.reset();
   controller_.clear();
@@ -154,6 +158,7 @@ bool MotionHighLevelClient::startControl(int32_t timeout_ms)
   }
 
   Json::Value params(Json::objectValue);
+  params["cmdMode"] = true;
   if (lease_ms_ > 0) {
     params["leaseTimeout"] = lease_ms_;
   }
@@ -257,12 +262,12 @@ void MotionHighLevelClient::setEventCallback(EventCallback cb)
   event_callback_ = std::move(cb);
 }
 
-void MotionHighLevelClient::setMotionOdometryCallback(MotionOdometryCallback cb)
+void MotionHighLevelClient::setSensorObservedCallback(SensorObservedCallback cb)
 {
   if (state_ != kDisconnected) {
     return;
   }
-  odometry_callback_ = std::move(cb);
+  sensor_observed_callback_ = std::move(cb);
 }
 
 void MotionHighLevelClient::setMotionObservedCallback(MotionObservedCallback cb)
@@ -456,22 +461,6 @@ bool MotionHighLevelClient::emergencyStop(int32_t timeout_ms)
   return rpc_call("emergencyStopMotion", controller_, null_params(), ret, timeout_ms, "emergencyStopMotion");
 }
 
-bool MotionHighLevelClient::resetMotionOdometry(std::string & out, int32_t timeout_ms)
-{
-  if (!ensure_controlled()) {
-    return false;
-  }
-
-  Json::Value ret;
-  if (!rpc_call(
-      "resetMotionOdometry", controller_, null_params(), ret, timeout_ms,
-      "resetMotionOdometry"))
-  {
-    return false;
-  }
-  return response_to_output(ret, out);
-}
-
 bool MotionHighLevelClient::setMotionObservedEnable(bool motion_enable, bool sensor_enable, int32_t timeout_ms)
 {
   if (!ensure_connected()) {
@@ -482,14 +471,44 @@ bool MotionHighLevelClient::setMotionObservedEnable(bool motion_enable, bool sen
   params["motionEnable"] = motion_enable;
   params["sensorEnable"] = sensor_enable;
 
+  // The server starts publishing observations before replying to this RPC. Keep the
+  // high-rate subscriptions out of the single-threaded executor until the reply is
+  // received; this also makes repeated enable/disable calls deterministic.
+  destroy_motion_observed_subscription();
+  destroy_sensor_observed_subscription();
+
   Json::Value ret;
-  return rpc_call(
+  bool result = rpc_call(
     "setMotionObservedEnable",
     controller_.empty() ? client_id() : controller_,
     params,
     ret,
     timeout_ms,
     "setMotionObservedEnable");
+
+  // RobotServer's custom ROS 2 service can discover the request writer before it
+  // discovers a newly-created response reader. This operation is idempotent, so a
+  // single retry safely covers the first-response discovery race.
+  if (!result) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    result = rpc_call(
+      "setMotionObservedEnable",
+      controller_.empty() ? client_id() : controller_,
+      params,
+      ret,
+      timeout_ms,
+      "setMotionObservedEnable retry");
+  }
+
+  if (result) {
+    if (motion_enable) {
+      create_motion_observed_subscription();
+    }
+    if (sensor_enable) {
+      create_sensor_observed_subscription();
+    }
+  }
+  return result;
 }
 
 bool MotionHighLevelClient::startAudioPlay(
@@ -879,27 +898,29 @@ void MotionHighLevelClient::destroy_event_subscription()
   event_subscription_.reset();
 }
 
-void MotionHighLevelClient::create_odometry_subscription()
+void MotionHighLevelClient::create_sensor_observed_subscription()
 {
-  if (odometry_subscription_ || odometry_topic_.empty() || !odometry_callback_) {
+  if (sensor_observed_subscription_ || sensor_observed_topic_.empty() ||
+    !sensor_observed_callback_)
+  {
     return;
   }
 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1));
   qos.best_effort();
   qos.durability_volatile();
-  odometry_subscription_ = node_->create_subscription<MotionOdometry>(
-    odometry_topic_, qos,
-    [this](const MotionOdometry::SharedPtr message) {
-      if (odometry_callback_) {
-        odometry_callback_(*message);
+  sensor_observed_subscription_ = node_->create_subscription<SensorObserved>(
+    sensor_observed_topic_, qos,
+    [this](const SensorObserved::SharedPtr message) {
+      if (sensor_observed_callback_) {
+        sensor_observed_callback_(*message);
       }
     });
 }
 
-void MotionHighLevelClient::destroy_odometry_subscription()
+void MotionHighLevelClient::destroy_sensor_observed_subscription()
 {
-  odometry_subscription_.reset();
+  sensor_observed_subscription_.reset();
 }
 
 void MotionHighLevelClient::create_motion_observed_subscription()

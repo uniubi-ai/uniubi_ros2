@@ -25,7 +25,7 @@
  * - UNIUBI_TEST_ROS_DOMAIN_ID
  * - UNIUBI_TEST_SERVICE_NAME
  * - UNIUBI_TEST_EVENT_TOPIC
- * - UNIUBI_TEST_ODOMETRY_TOPIC
+ * - UNIUBI_TEST_SENSOR_OBSERVED_TOPIC
  * - UNIUBI_TEST_DEVICE_ID（必须显式配置；示例不内置设备 SN）
  */
 namespace
@@ -39,7 +39,7 @@ using HLError = MotionHighLevelClient::HighLevelError;
 constexpr const char * kRosDomainId = "42";
 constexpr const char * kRosServiceName = "robotServer";
 constexpr const char * kRosEventTopic = "/robotServer/Event";
-constexpr const char * kRosOdometryTopic = "/motion/odometry";
+constexpr const char * kRosSensorObservedTopic = "/sensor/observed";
 constexpr int32_t kControlTimeoutMs = 10000;
 constexpr bool kEnableMotionActionDemo = false;
 
@@ -66,7 +66,8 @@ public:
   : rclcpp::Node("uniubi_motion_highlevel_client_test"),
     service_name_(get_env_or_default("UNIUBI_TEST_SERVICE_NAME", kRosServiceName)),
     event_topic_(get_env_or_default("UNIUBI_TEST_EVENT_TOPIC", kRosEventTopic)),
-    odometry_topic_(get_env_or_default("UNIUBI_TEST_ODOMETRY_TOPIC", kRosOdometryTopic)),
+    sensor_observed_topic_(
+      get_env_or_default("UNIUBI_TEST_SENSOR_OBSERVED_TOPIC", kRosSensorObservedTopic)),
     device_id_(get_env_or_default("UNIUBI_TEST_DEVICE_ID", ""))
   {
   }
@@ -81,7 +82,7 @@ public:
       service_name_,
       device_id_,
       event_topic_,
-      odometry_topic_);
+      sensor_observed_topic_);
     client_->setConnectCallback(
       [this](HLState state, HLError error) {
         on_connect(state, error);
@@ -90,9 +91,9 @@ public:
       [this](const std::string & topic, const std::string & payload) {
         on_event(topic, payload);
       });
-    client_->setMotionOdometryCallback(
-      [this](const uniubi::msg::MotionOdometry & odometry) {
-        on_odometry(odometry);
+    client_->setSensorObservedCallback(
+      [this](const uniubi::msg::SensorObserved & sensor) {
+        on_sensor_observed(sensor);
       });
   }
 
@@ -104,7 +105,7 @@ public:
     std::cout << "ROS_DOMAIN_ID=" << domain_id
               << ", service=" << service_name_
               << ", event_topic=" << event_topic_
-              << ", odometry_topic=" << odometry_topic_
+              << ", sensor_observed_topic=" << sensor_observed_topic_
               << ", device_id=" << device_id_
               << ", client_id=" << client_->client_id()
               << std::endl;
@@ -276,10 +277,12 @@ private:
     }
   }
 
-  void on_odometry(const uniubi::msg::MotionOdometry & odometry)
+  void on_sensor_observed(const uniubi::msg::SensorObserved & sensor)
   {
+    const auto & odometry = sensor.odom;
     // position/yaw 已由设备端累计，这里只读记录，不再次积分。
-    std::cout << "[odom] epoch=" << odometry.epoch
+    std::cout << "[sensor] gps=" << static_cast<unsigned>(sensor.gps.valid)
+              << " odom_epoch=" << odometry.epoch
               << " valid=" << (odometry.valid ? "true" : "false")
               << " x=" << odometry.position[0]
               << " y=" << odometry.position[1]
@@ -291,7 +294,7 @@ private:
   std::unique_ptr<MotionHighLevelClient> client_;
   std::string service_name_;
   std::string event_topic_;
-  std::string odometry_topic_;
+  std::string sensor_observed_topic_;
   std::string device_id_;
 };
 

@@ -12,17 +12,19 @@ Direct DDS 和 Direct RPC 是两种平级接入方式。
 原始持续数据通过 DDS/ROS 2 topic 提供：
 
 - Motion observation topic：`/motion/observed`
-- Walk odometry topic：`/motion/odometry`
-- Sensor observation topic：`/sensor/observed`
+- Sensor observation topic：`/sensor/observed`（GPS、UWB、Walk 里程计）
 - 原始控制 topic：`/motion/trc`（不是普通只读数据流）
 
-订阅这些观测 topic 不要求持有 High Level 控制权。其中 `/motion/odometry` 可直接订阅；
-`/motion/observed` 和 `/sensor/observed` 默认关闭，协议直连使用者必须先建立 reader，
+订阅这些观测 topic 不要求持有 High Level 控制权。`/motion/observed` 和
+`/sensor/observed` 默认关闭，协议直连使用者必须先建立 reader，
 再通过无需运动控制权的 RPC 调用 `setMotionObservedEnable()` 开启。Motion bridge 会自动管理
 原始观测流，其业务节点只需订阅 bridge 发布的标准 ROS 2 topic。原始 topic 测试通过只说明消息类型、
 DDS 发现和 QoS 链路可用。
 
-`/motion/odometry` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，不受 `setMotionObservedEnable()` 控制。订阅不需要 High Level 控制权；显式 reset 需要控制权。里程计仅在 Walk 模式有效，切换到其他动作后 `position` / `yaw` 清零、`epoch` 递增且 `valid=false`。
+`/sensor/observed` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，由
+`setMotionObservedEnable(..., sensor_enable=true)` 开启。里程计从 `SensorObserved.odom`
+读取，仅在 Walk 模式有效；退出 Walk 时保留当前区间末值并置 `valid=false`，再次进入 Walk 时
+建立新原点并递增 `epoch`。
 
 ### RPC、Event 和控制
 
@@ -47,7 +49,7 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 
 `/odom` 仅转发 `valid=true` 的设备累计里程计，不再次积分，也暂不发布 TF。
 `position.y` 和 `twist.linear.y` 均为正左负右，bridge 不做符号转换。原始生命周期字段仍以
-`/motion/odometry` 为准。
+`/sensor/observed` 中的 `odom` 为准。
 
 ## Motion bridge 状态观测
 
@@ -71,7 +73,7 @@ export ROS_DOMAIN_ID=42
 
 `MotionHighLevelClient` 和 `SystemRpcClientBase` 会将目标 `device_id` 写入每个 `System.srv`
 请求；robotServer 按目标设备 SN 过滤 RPC 请求，只有匹配设备响应。但该机制只覆盖 RPC，不能
-隔离 `/motion/observed`、`/motion/odometry`、`/sensor/observed` 和 `/robotServer/Event` 等
+隔离 `/motion/observed`、`/sensor/observed` 和 `/robotServer/Event` 等
 原始 topic，因为这些消息当前没有可供 bridge 过滤的 `device_id`。
 
 此外，多个 bridge 使用相同的 `/cmd_vel`、`/motion/*`、`/odom` 等全局 ROS 名称时也会发生接口
