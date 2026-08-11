@@ -9,6 +9,9 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 `StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。本仓库不链接
 `librobotMotionSdk.so`；所有模式均通过 ROS 2 service 和 DDS topic 对接 robotServer。
 
+> **分支配套关系：** 当前文档属于 `uniubi_ros2/debug_nav`，必须搭配
+> `uniubi_robot_msgs/debug_nav` 使用。两个仓库不要混用 `main` 分支的接口定义。
+
 ## 从这里开始
 
 仓库提供一个默认业务入口和两个按需使用的高级入口。业务开发直接选择 Motion bridge：
@@ -89,10 +92,10 @@ export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><Networ
 ```bash
 mkdir -p ~/ros2_ws/src
 
-git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
+git clone -b debug_nav https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
 cp -r ~/uniubi_robot_msgs/ros2 ~/ros2_ws/src/uniubi
 
-git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
+git clone -b debug_nav https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
 cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
 cp -r ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/
 
