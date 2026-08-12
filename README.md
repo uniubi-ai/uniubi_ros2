@@ -136,7 +136,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
   "{action: walking, params_json: '{}'}"
 
 ros2 topic pub --rate 50 /cmd_vel geometry_msgs/msg/Twist \
-  '{linear: {x: 0.2, y: 0.0}, angular: {z: 0.0}}'
+  '{linear: {x: 0.5, y: 0.0}, angular: {z: 0.0}}'
 
 ros2 service call /motion/stop_action std_srvs/srv/Trigger '{}'
 ros2 service call /motion/release_control std_srvs/srv/Trigger '{}'
