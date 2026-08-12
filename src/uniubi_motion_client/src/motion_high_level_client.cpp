@@ -87,7 +87,7 @@ MotionHighLevelClient::MotionHighLevelClient(
   executor_(executor),
   pending_renew_request_id_(std::nullopt),
   pending_renew_deadline_(std::nullopt),
-  last_renew_at_(std::chrono::steady_clock::now()),
+  last_control_activity_at_(std::chrono::steady_clock::now()),
   renew_sequence_(0),
   event_topic_(event_topic),
   sensor_observed_topic_(sensor_observed_topic),
@@ -194,7 +194,7 @@ bool MotionHighLevelClient::startControl(int32_t timeout_ms)
   raw_action_id_ =
     ret.isMember("rawActionId") && ret["rawActionId"].isNumeric() ? ret["rawActionId"].asUInt64() : 0;
   raw_control_seq_ = 1;
-  last_renew_at_ = std::chrono::steady_clock::now();
+  mark_control_activity();
   state_ = kControlled;
   set_error(kNone);
   start_renew_timer();
@@ -368,7 +368,12 @@ bool MotionHighLevelClient::startAction(
   }
 
   Json::Value ret;
-  return rpc_call("startMotionAction", controller_, params, ret, timeout_ms, "startMotionAction");
+  const bool success =
+    rpc_call("startMotionAction", controller_, params, ret, timeout_ms, "startMotionAction");
+  if (success) {
+    mark_control_activity();
+  }
+  return success;
 }
 
 bool MotionHighLevelClient::stopAction(int32_t timeout_ms)
@@ -378,7 +383,12 @@ bool MotionHighLevelClient::stopAction(int32_t timeout_ms)
   }
 
   Json::Value ret;
-  return rpc_call("stopMotionAction", controller_, null_params(), ret, timeout_ms, "stopMotionAction");
+  const bool success =
+    rpc_call("stopMotionAction", controller_, null_params(), ret, timeout_ms, "stopMotionAction");
+  if (success) {
+    mark_control_activity();
+  }
+  return success;
 }
 
 bool MotionHighLevelClient::setActionParams(
@@ -400,7 +410,12 @@ bool MotionHighLevelClient::setActionParams(
   }
 
   Json::Value ret;
-  return rpc_call("setMotionActionParams", controller_, params, ret, timeout_ms, "setMotionActionParams");
+  const bool success =
+    rpc_call("setMotionActionParams", controller_, params, ret, timeout_ms, "setMotionActionParams");
+  if (success) {
+    mark_control_activity();
+  }
+  return success;
 }
 
 bool MotionHighLevelClient::setRawControlCmd(const TRCStickFrame & frame)
@@ -458,7 +473,12 @@ bool MotionHighLevelClient::emergencyStop(int32_t timeout_ms)
   }
 
   Json::Value ret;
-  return rpc_call("emergencyStopMotion", controller_, null_params(), ret, timeout_ms, "emergencyStopMotion");
+  const bool success =
+    rpc_call("emergencyStopMotion", controller_, null_params(), ret, timeout_ms, "emergencyStopMotion");
+  if (success) {
+    mark_control_activity();
+  }
+  return success;
 }
 
 bool MotionHighLevelClient::setMotionObservedEnable(bool motion_enable, bool sensor_enable, int32_t timeout_ms)
@@ -761,6 +781,18 @@ std::chrono::milliseconds MotionHighLevelClient::renew_interval() const
   return std::clamp(lease / 3, std::chrono::milliseconds(200), std::chrono::milliseconds(10000));
 }
 
+void MotionHighLevelClient::mark_control_activity()
+{
+  std::lock_guard<std::mutex> lock(control_activity_mutex_);
+  last_control_activity_at_ = std::chrono::steady_clock::now();
+}
+
+std::chrono::steady_clock::time_point MotionHighLevelClient::last_control_activity() const
+{
+  std::lock_guard<std::mutex> lock(control_activity_mutex_);
+  return last_control_activity_at_;
+}
+
 void MotionHighLevelClient::start_renew_timer()
 {
   stop_renew_timer();
@@ -793,17 +825,29 @@ void MotionHighLevelClient::tick_renew()
   }
 
   const auto now = std::chrono::steady_clock::now();
+  const auto activity_at = last_control_activity();
+  const auto lease_deadline = activity_at +
+    std::chrono::milliseconds(lease_ms_ > 0 ? lease_ms_ : kDefaultLeaseMs);
   if (pending_renew_request_id_.has_value()) {
     if (pending_renew_deadline_.has_value() && now >= *pending_renew_deadline_) {
       (void)remove_pending_request(*pending_renew_request_id_);
       pending_renew_request_id_.reset();
       pending_renew_deadline_.reset();
-      lose_control(kSessionExpired);
+      if (now >= lease_deadline) {
+        lose_control(kSessionExpired);
+      } else {
+        std::cerr << "renewMotionControl timed out; retrying before lease expiry" << std::endl;
+      }
     }
     return;
   }
 
-  if (now < last_renew_at_ + renew_interval()) {
+  if (now >= lease_deadline) {
+    lose_control(kSessionExpired);
+    return;
+  }
+
+  if (now < activity_at + renew_interval()) {
     return;
   }
 
@@ -819,7 +863,9 @@ void MotionHighLevelClient::tick_renew()
     pending_renew_deadline_ = now + std::chrono::milliseconds(kRenewTimeoutMs);
   } catch (const std::exception & e) {
     std::cerr << "renewMotionControl async RPC failed: " << e.what() << std::endl;
-    lose_control(kSessionExpired);
+    if (std::chrono::steady_clock::now() >= lease_deadline) {
+      lose_control(kSessionExpired);
+    }
   }
 }
 
@@ -859,7 +905,7 @@ void MotionHighLevelClient::handle_renew_response(
     {
       lease_ms_ = payload["params"]["leaseTimeout"].asInt();
     }
-    last_renew_at_ = std::chrono::steady_clock::now();
+    mark_control_activity();
     set_error(kNone);
   } catch (const std::exception & e) {
     std::cerr << "renewMotionControl response failed: " << e.what() << std::endl;

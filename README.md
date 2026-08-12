@@ -126,7 +126,8 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
 所在网卡。
 
 bridge 启动后只连接 robotServer，不会立即申请运动控制权。第一次调用
-`/motion/start_action` 时才自动取权并启动续约。
+`/motion/start_action` 时才自动取权并启动租约维护。成功的动作控制 RPC 会直接刷新租约，
+只有控制调用空闲时才额外发送续约 RPC。
 
 一个最小控制流程：
 

@@ -112,7 +112,7 @@ public:
     auto_connect_ = declare_parameter<bool>("auto_connect", true);
     cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "/cmd_vel");
     cmd_vel_timeout_ms_ = declare_parameter<int32_t>("cmd_vel_timeout_ms", 500);
-    cmd_vel_rate_hz_ = declare_parameter<double>("cmd_vel_rate_hz", 50.0);
+    cmd_vel_rate_hz_ = declare_parameter<double>("cmd_vel_rate_hz", 30.0);
     odom_topic_ = declare_parameter<std::string>("odom_topic", "/odom");
     odom_frame_id_ = declare_parameter<std::string>("odom_frame_id", "odom");
     base_frame_id_ = declare_parameter<std::string>("base_frame_id", "base_link");
@@ -134,7 +134,7 @@ public:
       cmd_vel_timeout_ms_ = 500;
     }
     if (!std::isfinite(cmd_vel_rate_hz_) || cmd_vel_rate_hz_ <= 0.0) {
-      cmd_vel_rate_hz_ = 50.0;
+      cmd_vel_rate_hz_ = 30.0;
     }
     if (!std::isfinite(battery_publish_rate_hz_) || battery_publish_rate_hz_ <= 0.0) {
       battery_publish_rate_hz_ = 1.0;
@@ -1059,7 +1059,7 @@ private:
   bool auto_connect_{true};
   std::string cmd_vel_topic_;
   int32_t cmd_vel_timeout_ms_{500};
-  double cmd_vel_rate_hz_{50.0};
+  double cmd_vel_rate_hz_{30.0};
   std::string odom_topic_;
   std::string odom_frame_id_;
   std::string base_frame_id_;

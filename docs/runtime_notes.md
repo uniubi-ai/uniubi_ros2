@@ -44,7 +44,9 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
   `/motion/status.line_velocity_y` 也使用相同方向定义。
 - bridge 只读取 `linear.x`、`linear.y` 和 `angular.z`，不做动作判断或速度限幅；SDK 与服务端负责校验和安全限制。
 - 接收超时只发送一次三个速度字段均为零的参数，不停止动作、不释放控制权。
-- 高频输入会合并为最新值，并按 `cmd_vel_rate_hz` 限频，避免同步 RPC 排队。
+- 高频输入会合并为最新值，并按 `cmd_vel_rate_hz`（默认 30 Hz）限频。
+- 成功的 `startAction`、`setActionParams`、`stopAction` 和 `emergencyStop` 会刷新服务端控制租约；
+  client 仅在这些控制 RPC 空闲达到续约周期后发送 `renewMotionControl`。失败或超时的 RPC 不计为续约。
 - `stop_action` 只停止动作并继续持权续约；`release_control` 与进程退出会先停止动作再释放控制会话。
 
 `/odom` 仅转发 `valid=true` 的设备累计里程计，不再次积分，也暂不发布 TF。

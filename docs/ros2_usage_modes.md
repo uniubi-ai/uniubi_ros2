@@ -73,8 +73,8 @@ bridge 是唯一的高级运控客户端，内部完成连接、按需取权、�
 → connect()
 → queryCapabilities()
 → startControl()
-→ 持续 spin，client 内部完成 renewMotionControl
 → startAction()/setActionParams()/stopAction()
+→ 持续 spin；有成功控制调用时由调用本身刷新租约，空闲时 client 自动 renewMotionControl
 → releaseControl()
 → disconnect()
 ```

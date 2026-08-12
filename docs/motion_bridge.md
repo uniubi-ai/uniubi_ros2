@@ -58,7 +58,7 @@ Service 返回成功只代表服务端接受请求，不代表机械动作已经
 | 名称 | 类型 | QoS/频率 | 说明 |
 |---|---|---|---|
 | `/motion/status` | `uniubi_motion_bridge/msg/MotionStatus` | Reliable、Transient Local，默认 10 Hz | 实际动作、速度、控制状态和最近错误 |
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | Best Effort、Keep Last 1，最多 50 Hz 转发 | 当前动作参数输入 |
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | Best Effort、Keep Last 1，默认最多 30 Hz 转发 | 当前动作参数输入 |
 | `/odom` | `nav_msgs/msg/Odometry` | Best Effort、Keep Last 1 | 有效 Walk 累计里程计 |
 | `/joint_states` | `sensor_msgs/msg/JointState` | Best Effort、Keep Last 1 | 关节角、速度和力矩 |
 | `/imu/data` | `sensor_msgs/msg/Imu` | Sensor Data QoS | 姿态、角速度和线加速度 |
@@ -70,7 +70,7 @@ Service 返回成功只代表服务端接受请求，不代表机械动作已经
 启动 bridge
 → connected
 → /motion/start_action
-→ 自动 takeMotionControl + 自动续约
+→ 自动 takeMotionControl + 自动维护租约
 → 使用 /cmd_vel 或继续 start_action
 → /motion/stop_action（可选）
 → /motion/release_control
@@ -185,7 +185,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 | `lease_ms` | `60000` | 申请控制权时请求的租约 |
 | `auto_connect` | `true` | 启动后是否自动连接 robotServer |
 | `cmd_vel_timeout_ms` | `500` | ROS 2 速度输入超时 |
-| `cmd_vel_rate_hz` | `50.0` | 最大参数 RPC 下发频率 |
+| `cmd_vel_rate_hz` | `30.0` | 最大参数 RPC 下发频率；上游可更高频发布，bridge 仅转发最新值 |
 | `motion_status_rate_hz` | `10.0` | 实际动作状态查询频率 |
 | `battery_publish_rate_hz` | `1.0` | 电池状态发布频率 |
 

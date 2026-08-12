@@ -7,7 +7,7 @@ uniubi_motion_bridge:
     auto_connect: true
     cmd_vel_topic: /cmd_vel
     cmd_vel_timeout_ms: 500
-    cmd_vel_rate_hz: 50.0
+    cmd_vel_rate_hz: 30.0
     motion_status_topic: /motion/status
     motion_status_rate_hz: 10.0
     odom_topic: /odom

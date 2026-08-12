@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -147,7 +148,7 @@ public:
    * @brief 申请高级运动控制权。
    *
    * 成功后保存服务端返回的 controller/rawActionId，状态切为 kControlled，
-   * 并启动内部定时器周期调用 renewMotionControl 续约。
+   * 并启动租约维护定时器；成功控制调用会刷新租约，控制空闲时才发送 renewMotionControl。
    */
   bool startControl(int32_t timeout_ms = 10000);
 
@@ -295,13 +296,19 @@ private:
   /// 按协议计算续约周期：clamp(leaseTimeout / 3, 200ms, 10s)。
   std::chrono::milliseconds renew_interval() const;
 
+  /// 记录最近一次被 MotionServer 接受、能够刷新控制权租约的控制 RPC。
+  void mark_control_activity();
+
+  /// 获取最近一次成功控制活动时间，用于计算服务端租约期限。
+  std::chrono::steady_clock::time_point last_control_activity() const;
+
   /// 启动控制权续约 timer。
   void start_renew_timer();
 
   /// 停止续约 timer，并清理在途续约请求。
   void stop_renew_timer();
 
-  /// timer 回调：到达续约周期后异步发送 renewMotionControl。
+  /// timer 回调：控制 RPC 空闲达到续约周期后异步发送 renewMotionControl。
   void tick_renew();
 
   /// 处理 renewMotionControl 异步响应。
@@ -339,7 +346,8 @@ private:
   rclcpp::TimerBase::SharedPtr renew_timer_;
   std::optional<std::int64_t> pending_renew_request_id_;
   std::optional<std::chrono::steady_clock::time_point> pending_renew_deadline_;
-  std::chrono::steady_clock::time_point last_renew_at_;
+  mutable std::mutex control_activity_mutex_;
+  std::chrono::steady_clock::time_point last_control_activity_at_;
   std::uint64_t renew_sequence_;
   std::string event_topic_;
   std::string sensor_observed_topic_;
