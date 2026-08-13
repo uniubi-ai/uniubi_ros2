@@ -2,8 +2,8 @@
 
 [English](ros2_usage_modes.md) | **简体中文**
 
-Uniubi ROS 2 提供一个默认业务入口和两个按需使用的高级入口。它们均不依赖
-`librobotMotionSdk.so`，但解决的问题不同：
+Uniubi ROS 2 提供一个默认运动业务入口和两个按需使用的高级运动入口。这三种运动接入方式
+均不依赖 `librobotMotionSdk.so`，但解决的问题不同：
 
 - Motion bridge：常用运动控制和部分标准 ROS 2 观测接口。
 - `uniubi_motion_client`：自定义 C++ 高级运控流程。
@@ -12,6 +12,10 @@ Uniubi ROS 2 提供一个默认业务入口和两个按需使用的高级入口�
 协议直连是一种完整接入方式，不再把 Direct DDS topic 和 Direct RPC 列成两个平级方案。
 其中原始数据订阅和 RPC 控制只是同一套协议中的不同通道，完整契约见
 [`uniubi_robot_dds_api.zh-CN.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.zh-CN.md)。
+
+摄像头媒体不属于这三种运动接入方式。普通 ROS 2 摄像头用户运行独立的板端本地
+[`uniubi_media_driver`](../src/uniubi_media_driver/README.zh-CN.md)；板端专业感知开发者直接
+使用 SDK MediaBus API。
 
 ## 选型对比
 
@@ -31,8 +35,9 @@ Uniubi ROS 2 提供一个默认业务入口和两个按需使用的高级入口�
 
 Motion bridge 当前以常用运动控制为主，并选择性转换里程计、关节、IMU 和电池等观测数据。
 它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量功能移植。是否支持某项能力，应以
-[Motion bridge 使用手册](motion_bridge.zh-CN.md) 当前列出的 topic、service 和参数为准；系统、音频、
-媒体、原始字段及后续新增的协议能力可能需要使用 `uniubi_motion_client` 或协议直连。
+[Motion bridge 使用手册](motion_bridge.zh-CN.md) 当前列出的 topic、service 和参数为准。摄像头帧
+使用独立的 `uniubi_media_driver`；其他系统、音频、原始字段及后续新增协议能力可能需要使用
+`uniubi_motion_client` 或协议直连。
 
 业务节点只与以下公开接口交互：
 

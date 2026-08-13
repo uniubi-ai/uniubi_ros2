@@ -1,0 +1,13 @@
+uniubi_media_driver:
+  ros__parameters:
+    sdk_config_file: ""
+    client_id: uniubiMediaDriver
+    sdk_init_timeout_s: 30
+    connect_timeout_ms: 5000
+    topic_prefix: ""
+    camera_names: [front_camera_0, front_camera_1]
+    camera_channels: [0, 1]
+    frame_ids:
+      - front_camera_0_optical_frame
+      - front_camera_1_optical_frame
+    lazy_subscription: true

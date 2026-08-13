@@ -2,14 +2,16 @@
 
 [English](README.md) | **简体中文**
 
-Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端，以及
-DDS / ROS 2 协议直连接口和示例。
+Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、
+DDS / ROS 2 协议直连接口，以及板端 MediaBus 摄像头驱动。
 
 robotServer 原始 `.msg` / `.srv` 定义统一来自
 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs/blob/main/README.zh-CN.md)，其 ROS 2 package 名和
 接口类型前缀是 `uniubi`。bridge 专用的 `MotionStatus.msg` 和
-`StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。本仓库不链接
-`librobotMotionSdk.so`；所有模式均通过 ROS 2 service 和 DDS topic 对接 robotServer。
+`StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。三种运动接入方式均不链接
+`librobotMotionSdk.so`，而是通过 ROS 2 service 和 DDS topic 对接 robotServer。独立的
+`uniubi_media_driver` 需要在 aarch64 板端链接 SDK，因为 MediaBus 是本地共享内存接口，
+不是远程 robotServer topic。
 
 ## 从这里开始
 
@@ -30,7 +32,7 @@ DDS / ROS 2 协议直连是一种完整的底层接入方式，同时包含 RPC�
 
 > **功能范围：** Motion bridge 当前以常用运动控制为主，并选择性提供里程计、关节、IMU、
 > 电池等标准 ROS 2 观测接口。它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量
-> ROS 2 映射；未在本文接口表中列出的系统、音频、媒体、原始字段或新增协议能力可能尚未移植。
+> ROS 2 映射。摄像头帧明确由独立 `uniubi_media_driver` 提供，不放入 Motion bridge。
 
 如果目标只是读取里程计、关节、IMU 或电池，使用 bridge 发布的标准 topic 即可，不需要申请运动控制权。
 
@@ -42,7 +44,8 @@ uniubi_robot_msgs
 
 uniubi_ros2
 ├── uniubi_motion_client      # 源码形式的 RPC/DDS C++ 封装，不是 SDK 动态库
-└── uniubi_motion_bridge      # 面向业务节点的节点及 bridge 专用 msg/srv
+├── uniubi_motion_bridge      # 面向业务节点的节点及 bridge 专用 msg/srv
+└── uniubi_media_driver       # 板端 MediaBus JPEG 摄像头驱动
 ```
 
 bridge 内部复用 `uniubi_motion_client`：
@@ -70,6 +73,9 @@ robotServer / MotionServer
   该字段用于 RPC 路由，不能隔离原始 DDS topic。
 - 当前建议每条机器人使用独立的 `ROS_DOMAIN_ID`；不要让多条机器人及其 bridge 共享同一 Domain。
 - 推荐使用 Cyclone DDS。
+
+板端和开发机的软件包清单、环境加载与验证命令见
+[安装 ROS 2 Humble](docs/ros2_install.zh-CN.md)。
 
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -102,6 +108,9 @@ cd ~/ros2_ws
 colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
 ```
+
+`uniubi_media_driver` 是可选的板端本地包，具有单独的 SDK 依赖。构建和运行方式见
+[`src/uniubi_media_driver/README.zh-CN.md`](src/uniubi_media_driver/README.zh-CN.md)。
 
 ## 推荐方式：Motion bridge
 
@@ -188,13 +197,33 @@ UNIUBI_TEST_SENSOR_OBSERVED_TOPIC=/sensor/observed \
 ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
+## 前置双摄像头
+
+普通 ROS 2 开发者在机器人 aarch64 板端运行独立的 `uniubi_media_driver`。驱动直接转发
+MediaBus 已有的两路 JPEG，不进行二次编码：
+
+```text
+/front_camera_0/image_raw/compressed
+/front_camera_1/image_raw/compressed
+```
+
+两路均使用 `sensor_msgs/msg/CompressedImage`，`format: jpeg`。通道号只用于区分两路
+前置摄像头，不表示左右位置。驱动使用 best-effort、volatile、depth-1 QoS，并仅在对应
+topic 存在订阅者时启动该路码流。
+
+板端专业感知开发应直接使用 C++/Python SDK 的 MediaBus API，以获得 raw NV12/NV21、
+音频、低拷贝 GPU 处理、plane/stride 和完整编码元数据。详见
+[媒体驱动说明](src/uniubi_media_driver/README.zh-CN.md)。
+
 ## 文档导航
 
 | 文档 | 面向人群 | 内容 |
 |---|---|---|
 | [README](README.zh-CN.md) | 所有开发者 | 选型、安装和推荐方式快速开始 |
+| [安装 ROS 2 Humble](docs/ros2_install.zh-CN.md) | 首次使用者与板端集成者 | Ubuntu 22.04 软件包、环境加载和验证 |
 | [ROS 2 使用方式](docs/ros2_usage_modes.zh-CN.md) | 架构设计与高级开发者 | 三种方式的流程、优缺点和选择建议 |
 | [Motion bridge 使用手册](docs/motion_bridge.zh-CN.md) | 普通业务开发者 | `/motion/*`、`/cmd_vel`、状态和观测接口 |
+| [媒体驱动说明](src/uniubi_media_driver/README.zh-CN.md) | ROS 2 摄像头用户 | 两路前置摄像头 JPEG topic、参数、平台约束和 SDK 边界 |
 | [运行注意事项](docs/runtime_notes.zh-CN.md) | 联调和协议开发者 | DDS、设备匹配、异步语义和安全边界 |
 | [DDS / ROS 2 Direct API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.zh-CN.md) | 协议开发者 | 原始 RPC、DDS topic 和字段契约 |
 | [ROS 2 与 DDS 映射](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/ros2_dds_interop_overview.zh-CN.md) | 接口维护者 | `.msg/.srv` 与 DDS IDL 映射规则 |

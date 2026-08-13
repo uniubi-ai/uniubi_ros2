@@ -30,7 +30,8 @@ DDS 发现和 QoS 链路可用。
 
 ### RPC、Event 和控制
 
-本仓不链接 `librobotMotionSdk.so`。协议直连通过 `uniubi/srv/System` 对接 robotServer：
+本仓的协议直连和运动相关 package 不链接 `librobotMotionSdk.so`，通过
+`uniubi/srv/System` 对接 robotServer：
 
 - RPC service：`uniubi/srv/System`
 - 异步控制事件：`/robotServer/Event`

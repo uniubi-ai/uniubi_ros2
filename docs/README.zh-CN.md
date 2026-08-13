@@ -8,11 +8,18 @@
 
 按以下顺序阅读：
 
-1. 仓库根目录 [README](../README.zh-CN.md)：完成安装和首次启动。
-2. [Motion bridge 使用手册](motion_bridge.zh-CN.md)：使用 `/motion/*`、`/cmd_vel` 和标准观测 topic。
-3. [运行注意事项](runtime_notes.zh-CN.md)：实机测试前确认动作异步语义和安全边界。
+1. 机器尚无已验证 ROS 2 环境时，先读[安装 ROS 2 Humble](ros2_install.zh-CN.md)。
+2. 仓库根目录 [README](../README.zh-CN.md)：完成工作区构建和首次启动。
+3. [Motion bridge 使用手册](motion_bridge.zh-CN.md)：使用 `/motion/*`、`/cmd_vel` 和标准观测 topic。
+4. [运行注意事项](runtime_notes.zh-CN.md)：实机测试前确认动作异步语义和安全边界。
 
 普通业务节点不需要直接调用 `uniubi/srv/System`，也不需要理解 DDS IDL 映射。
+
+## ROS 2 摄像头开发者
+
+阅读 [`uniubi_media_driver` 说明](../src/uniubi_media_driver/README.zh-CN.md)。媒体驱动是独立的
+板端本地包，不属于 Motion bridge；它为普通 ROS 2 应用提供便捷的 JPEG topic。板端感知和
+低拷贝流水线应直接使用 SDK MediaBus API。
 
 ## 需要自定义控制流程的 C++ 开发者
 

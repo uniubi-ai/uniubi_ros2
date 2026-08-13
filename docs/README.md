@@ -8,11 +8,19 @@ This page directs each type of developer to the relevant documentation so that a
 
 Read these documents in order:
 
-1. The repository [README](../README.md) for installation and the first launch.
-2. The [Motion bridge guide](motion_bridge.md) for `/motion/*`, `/cmd_vel`, and standard observation topics.
-3. [Runtime notes](runtime_notes.md) for asynchronous action semantics and safety boundaries before hardware testing.
+1. [Install ROS 2 Humble](ros2_install.md) when the machine does not have a verified ROS 2 environment.
+2. The repository [README](../README.md) for the workspace build and first launch.
+3. The [Motion bridge guide](motion_bridge.md) for `/motion/*`, `/cmd_vel`, and standard observation topics.
+4. [Runtime notes](runtime_notes.md) for asynchronous action semantics and safety boundaries before hardware testing.
 
 Typical application nodes do not need to call `uniubi/srv/System` directly or understand DDS IDL mappings.
+
+## ROS 2 camera users
+
+Read the [`uniubi_media_driver` guide](../src/uniubi_media_driver/README.md). The media driver is an
+independent board-local package rather than part of the Motion bridge. It provides convenient JPEG
+topics for ordinary ROS 2 applications. On-board perception and minimum-copy pipelines should use the
+SDK MediaBus API directly.
 
 ## C++ developers with custom control flows
 

@@ -2,13 +2,17 @@
 
 **English** | [简体中文](ros2_usage_modes.zh-CN.md)
 
-Uniubi ROS 2 provides one default application-facing entry point and two advanced options. None depend on `librobotMotionSdk.so`, but they address different needs:
+Uniubi ROS 2 provides one default application-facing motion entry point and two advanced motion options. These three motion-integration modes do not depend on `librobotMotionSdk.so`, but they address different needs:
 
 - Motion bridge: common motion control and selected standard ROS 2 observation interfaces.
 - `uniubi_motion_client`: custom C++ High Level motion-control flows.
 - Direct DDS / ROS 2 protocol: direct RPC, Event, data-topic, and TRC integration.
 
 Direct protocol integration is one complete approach, not two peer-level alternatives named Direct DDS topics and Direct RPC. Raw data subscriptions and RPC control are channels of the same protocol. See [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the complete contract.
+
+Camera media is intentionally outside these three motion modes. Ordinary ROS 2 camera users run the
+independent board-local [`uniubi_media_driver`](../src/uniubi_media_driver/README.md). Professional
+on-board perception developers use the SDK MediaBus API directly.
 
 ## Comparison
 
@@ -26,7 +30,7 @@ Default selection:
 
 ## Option 1: Motion bridge
 
-The Motion bridge focuses on common motion control and selectively converts odometry, joint, IMU, and battery observations. It is not a complete port of the High Level Client or low-level DDS / ROS 2 protocol. Treat the topics, services, and parameters in the [Motion bridge guide](motion_bridge.md) as the current feature boundary. System, audio, media, raw fields, and newly added protocol capabilities may require `uniubi_motion_client` or direct protocol access.
+The Motion bridge focuses on common motion control and selectively converts odometry, joint, IMU, and battery observations. It is not a complete port of the High Level Client or low-level DDS / ROS 2 protocol. Treat the topics, services, and parameters in the [Motion bridge guide](motion_bridge.md) as the current feature boundary. Camera frames use the independent `uniubi_media_driver`; other system, audio, raw fields, and newly added protocol capabilities may require `uniubi_motion_client` or direct protocol access.
 
 Application nodes interact only with these public interfaces:
 

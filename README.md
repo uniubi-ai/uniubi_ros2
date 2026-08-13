@@ -2,9 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, and direct DDS / ROS 2 protocol interfaces and examples.
+ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and an on-board MediaBus camera driver.
 
-The original robotServer `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. This repository does not link `librobotMotionSdk.so`; every mode communicates with robotServer through ROS 2 services and DDS topics.
+The original robotServer `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with robotServer through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK locally on the aarch64 board because MediaBus is a shared-memory interface rather than a remote robotServer topic.
 
 ## Start here
 
@@ -20,7 +20,7 @@ See [ROS 2 integration modes](docs/ros2_usage_modes.md) for a complete compariso
 
 Direct DDS / ROS 2 protocol integration is one complete low-level approach containing RPC, Event, data topics, the control-ownership lifecycle, and TRC. It is not two separate alternatives named “Direct DDS” and “Direct RPC.” See the [Direct DDS / ROS 2 API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the protocol contract.
 
-> **Feature scope:** The Motion bridge focuses on common motion control and selectively exposes standard ROS 2 observation interfaces for odometry, joints, IMU, and battery data. It is not a complete ROS 2 mapping of the High Level Client or the low-level DDS / ROS 2 protocol. System, audio, media, raw fields, or newly added protocol features not listed in this document may not yet be bridged.
+> **Feature scope:** The Motion bridge focuses on common motion control and selectively exposes standard ROS 2 observation interfaces for odometry, joints, IMU, and battery data. It is not a complete ROS 2 mapping of the High Level Client or the low-level DDS / ROS 2 protocol. Camera frames are intentionally provided by the independent `uniubi_media_driver`, not by the Motion bridge.
 
 If you only need odometry, joint, IMU, or battery data, subscribe to the standard topics published by the bridge. Read-only observation does not require motion control ownership.
 
@@ -32,7 +32,8 @@ uniubi_robot_msgs
 
 uniubi_ros2
 ├── uniubi_motion_client      # Source-level RPC/DDS C++ wrapper, not an SDK shared library
-└── uniubi_motion_bridge      # Application-facing node and bridge-specific msg/srv definitions
+├── uniubi_motion_bridge      # Application-facing node and bridge-specific msg/srv definitions
+└── uniubi_media_driver       # On-board MediaBus JPEG camera driver
 ```
 
 The bridge reuses `uniubi_motion_client` internally:
@@ -59,6 +60,9 @@ robotServer / MotionServer
 - You know the target robot's `device_id`. It is the `deviceNo` in device information (the robot SN). This field routes RPC calls but cannot isolate raw DDS topics.
 - Use a separate `ROS_DOMAIN_ID` for each robot. Do not place multiple robots and their bridges in the same Domain.
 - Cyclone DDS is recommended.
+
+For a board and development-machine package list, environment setup, and
+verification commands, see [Install ROS 2 Humble](docs/ros2_install.md).
 
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -89,6 +93,9 @@ cd ~/ros2_ws
 colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
 ```
+
+`uniubi_media_driver` is an optional board-local package with a separate SDK dependency. See
+[`src/uniubi_media_driver/README.md`](src/uniubi_media_driver/README.md) for its build and runtime setup.
 
 ## Recommended: Motion bridge
 
@@ -166,13 +173,33 @@ UNIUBI_TEST_SENSOR_OBSERVED_TOPIC=/sensor/observed \
 ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
+## Front cameras
+
+For ordinary ROS 2 applications, run the independent `uniubi_media_driver` locally on the robot's
+aarch64 board. It forwards the two existing MediaBus JPEG streams without re-encoding:
+
+```text
+/front_camera_0/image_raw/compressed
+/front_camera_1/image_raw/compressed
+```
+
+Both topics use `sensor_msgs/msg/CompressedImage` with `format: jpeg`. They identify two front-facing
+cameras; channel numbers do not claim a left/right mapping. The driver uses best-effort, volatile,
+depth-1 QoS and starts a camera stream only when that topic has a subscriber.
+
+Professional on-board perception developers should use the C++ or Python SDK MediaBus API directly
+for raw NV12/NV21, audio, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
+See the [media driver guide](src/uniubi_media_driver/README.md).
+
 ## Documentation
 
 | Document | Audience | Contents |
 |---|---|---|
 | [README](README.md) | All developers | Selection, installation, and recommended quick start |
+| [Install ROS 2 Humble](docs/ros2_install.md) | First-time users and board integrators | Ubuntu 22.04 packages, environment loading, and verification |
 | [ROS 2 integration modes](docs/ros2_usage_modes.md) | Architects and advanced developers | Workflows, trade-offs, and selection guidance for all three modes |
 | [Motion bridge guide](docs/motion_bridge.md) | Application developers | `/motion/*`, `/cmd_vel`, status, and observation interfaces |
+| [Media driver guide](src/uniubi_media_driver/README.md) | ROS 2 camera users | Two front-camera JPEG topics, parameters, platform constraints, and SDK boundary |
 | [Runtime notes](docs/runtime_notes.md) | Integration and protocol developers | DDS, device matching, asynchronous semantics, and safety boundaries |
 | [Direct DDS / ROS 2 API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) | Protocol developers | Raw RPC, DDS topics, and field contracts |
 | [ROS 2 and DDS mappings](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/ros2_dds_interop_overview.md) | Interface maintainers | `.msg/.srv` to DDS IDL mapping rules |

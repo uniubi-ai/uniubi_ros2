@@ -22,7 +22,9 @@ Subscribing to observation topics does not require High Level control ownership.
 
 ### RPC, Event, and control
 
-This repository does not link `librobotMotionSdk.so`. Direct protocol clients communicate with robotServer through `uniubi/srv/System`:
+The direct-protocol and motion packages in this repository do not link
+`librobotMotionSdk.so`. They communicate with robotServer through
+`uniubi/srv/System`:
 
 - RPC service: `uniubi/srv/System`
 - Asynchronous control events: `/robotServer/Event`

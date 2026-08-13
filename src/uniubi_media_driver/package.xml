@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>uniubi_media_driver</name>
+  <version>0.1.0</version>
+  <description>ROS 2 driver for UniUbi MediaBus camera frames.</description>
+  <maintainer email="support@uniubi.com">Uniubi</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
