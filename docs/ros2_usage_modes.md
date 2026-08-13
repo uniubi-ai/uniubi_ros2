@@ -1,38 +1,34 @@
-# ROS 2 使用方式与选型
+# ROS 2 Integration Modes
 
-Uniubi ROS 2 提供一个默认业务入口和两个按需使用的高级入口。它们均不依赖
-`librobotMotionSdk.so`，但解决的问题不同：
+**English** | [简体中文](ros2_usage_modes.zh-CN.md)
 
-- Motion bridge：常用运动控制和部分标准 ROS 2 观测接口。
-- `uniubi_motion_client`：自定义 C++ 高级运控流程。
-- DDS / ROS 2 协议直连：直接处理 RPC、Event、数据 topic 和 TRC。
+Uniubi ROS 2 provides one default application-facing entry point and two advanced options. None depend on `librobotMotionSdk.so`, but they address different needs:
 
-协议直连是一种完整接入方式，不再把 Direct DDS topic 和 Direct RPC 列成两个平级方案。
-其中原始数据订阅和 RPC 控制只是同一套协议中的不同通道，完整契约见
-[`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)。
+- Motion bridge: common motion control and selected standard ROS 2 observation interfaces.
+- `uniubi_motion_client`: custom C++ High Level motion-control flows.
+- Direct DDS / ROS 2 protocol: direct RPC, Event, data-topic, and TRC integration.
 
-## 选型对比
+Direct protocol integration is one complete approach, not two peer-level alternatives named Direct DDS topics and Direct RPC. Raw data subscriptions and RPC control are channels of the same protocol. See [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the complete contract.
 
-| 方式 | 主要用途 | 控制权 | 优点 | 主要代价 |
+## Comparison
+
+| Mode | Primary purpose | Control ownership | Advantages | Main cost |
 |---|---|---|---|---|
-| Motion bridge | 业务控制与标准观测 | bridge 自动管理 | 最简单、ROS 2 语义清晰 | 受公开能力范围限制 |
-| `uniubi_motion_client` | 自定义 C++ 高级流程 | client 续约，应用管理生命周期 | 能力完整、仍有统一封装 | 需要正确管理 executor 和收尾 |
-| DDS / ROS 2 协议直连 | 原始数据、协议维护和跨框架接入 | 只读数据不需要；控制流程自行管理 | 能力和字段最完整，最接近 wire contract | 需要理解 RPC、Event、IDL、QoS 和控制权 |
+| Motion bridge | Application control and standard observations | Bridge-managed | Simplest option with clear ROS 2 semantics | Limited to currently exposed capabilities |
+| `uniubi_motion_client` | Custom C++ High Level flows | Client renews; application manages lifecycle | More complete capabilities with a shared wrapper | Executor and shutdown must be managed correctly |
+| Direct DDS / ROS 2 protocol | Raw data, protocol maintenance, and cross-framework integration | Not needed for read-only data; application-managed for control | Most complete fields and closest to the wire contract | Requires understanding RPC, Event, IDL, QoS, and ownership |
 
-默认选择规则：
+Default selection:
 
-- 想控制动作、发送速度并读取状态：Motion bridge。
-- 单个 C++ 进程需要 bridge 尚未开放的能力：`uniubi_motion_client`。
-- 需要原始字段、定位 DDS 类型/QoS、新增协议接口或跨框架接入：DDS / ROS 2 协议直连。
+- To control actions, send velocity, and read state: use the Motion bridge.
+- If one C++ process needs capabilities not exposed by the bridge: use `uniubi_motion_client`.
+- For raw fields, DDS type/QoS debugging, new protocol interfaces, or cross-framework integration: use the direct DDS / ROS 2 protocol.
 
-## 方式一：Motion bridge
+## Option 1: Motion bridge
 
-Motion bridge 当前以常用运动控制为主，并选择性转换里程计、关节、IMU 和电池等观测数据。
-它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量功能移植。是否支持某项能力，应以
-[Motion bridge 使用手册](motion_bridge.md) 当前列出的 topic、service 和参数为准；系统、音频、
-媒体、原始字段及后续新增的协议能力可能需要使用 `uniubi_motion_client` 或协议直连。
+The Motion bridge focuses on common motion control and selectively converts odometry, joint, IMU, and battery observations. It is not a complete port of the High Level Client or low-level DDS / ROS 2 protocol. Treat the topics, services, and parameters in the [Motion bridge guide](motion_bridge.md) as the current feature boundary. System, audio, media, raw fields, and newly added protocol capabilities may require `uniubi_motion_client` or direct protocol access.
 
-业务节点只与以下公开接口交互：
+Application nodes interact only with these public interfaces:
 
 ```text
 /motion/* services
@@ -44,55 +40,55 @@ Motion bridge 当前以常用运动控制为主，并选择性转换里程计、
 /battery_state
 ```
 
-bridge 是唯一的高级运控客户端，内部完成连接、按需取权、续约、Event 处理和退出释放。
+The bridge is the sole High Level motion client. It manages connection, on-demand control acquisition, renewal, Event handling, and release on shutdown.
 
-优点：
+Advantages:
 
-- 最接近常规 ROS 2 topic/service 使用方式。
-- 业务节点不需要理解 controller token、租约和内部 JSON RPC。
-- 多个业务节点共享一个控制入口，减少重复取权冲突。
-- 关节、IMU、电池和里程计转换成社区常用消息。
+- Closest to conventional ROS 2 topic/service usage.
+- Application nodes do not need controller tokens, leases, or internal JSON RPC details.
+- Multiple application nodes share one control entry point, reducing ownership conflicts.
+- Joint, IMU, battery, and odometry data use common community messages.
 
-缺点：
+Trade-offs:
 
-- 以运动控制为主，只能使用 bridge 当前已经公开和转换的能力。
-- `/motion/status` 默认以 10 Hz 查询动作和速度，最多有一个查询周期的显示延迟。
-- `/cmd_vel` 没有逐条响应，最近失败通过 `/motion/status` 反映。
+- Motion-focused and limited to capabilities currently exposed and converted by the bridge.
+- `/motion/status` queries action and velocity at 10 Hz by default and may lag by one query period.
+- `/cmd_vel` has no per-message response; the latest failure appears in `/motion/status`.
 
-详细用法见 [Motion bridge 使用手册](motion_bridge.md)。
+See the [Motion bridge guide](motion_bridge.md) for details.
 
-## 方式二：`uniubi_motion_client` C++ 客户端
+## Option 2: `uniubi_motion_client` C++ client
 
-`uniubi_motion_client` 是本仓库源码编译出的 C++ 封装，不是 SDK 动态库。
+`uniubi_motion_client` is a C++ wrapper compiled from this repository's source, not an SDK shared library.
 
-典型流程：
+Typical flow:
 
 ```text
-创建 ROS 2 node 与 executor
-→ 在 connect 前注册状态、Event 和观测回调
+create ROS 2 node and executor
+→ register state, Event, and observation callbacks before connect
 → connect()
 → queryCapabilities()
 → startControl()
 → startAction()/setActionParams()/stopAction()
-→ 持续 spin；有成功控制调用时由调用本身刷新租约，空闲时 client 自动 renewMotionControl
+→ keep spinning; successful control calls refresh the lease, while an idle client sends renewMotionControl
 → releaseControl()
 → disconnect()
 ```
 
-优点：
+Advantages:
 
-- 可以使用比 bridge 更完整的高级运控、系统、音频和原始 TRC 接口。
-- 复用统一的 RPC 构造、响应匹配、Event 解析和续约逻辑。
-- 适合把高级能力嵌入一个受控的 C++ 进程。
+- Exposes more complete High Level motion, system, audio, and raw TRC interfaces than the bridge.
+- Reuses common RPC construction, response matching, Event parsing, and lease-renewal logic.
+- Suitable for embedding advanced capabilities in one controlled C++ process.
 
-缺点：
+Trade-offs:
 
-- 应用必须正确管理 executor、回调顺序和完整退出流程。
-- `connect()` 只表示连接，不能当作已经取得控制权。
-- 多个进程各自创建 client 时可能竞争控制权。
-- 对 Python 或普通 ROS 2 业务节点不如 bridge 直观。
+- The application must manage its executor, callback registration order, and complete shutdown flow correctly.
+- `connect()` means connected, not control ownership acquired.
+- Separate client processes may compete for control.
+- Less natural than the bridge for Python or typical ROS 2 application nodes.
 
-示例入口：
+Example:
 
 ```bash
 UNIUBI_TEST_ROS_DOMAIN_ID=42 \
@@ -102,88 +98,81 @@ UNIUBI_TEST_DEVICE_ID=<device-id> \
 ros2 run uniubi_motion_client motion_high_level_client_example
 ```
 
-示例中的真实运动默认关闭，构建或启动成功不代表实机动作已经验证。
+Real movement is disabled by default in the example. A successful build or launch does not mean that hardware motion has been validated.
 
-## 方式三：DDS / ROS 2 协议直连
+## Option 3: Direct DDS / ROS 2 protocol
 
-协议直连绕过 bridge 和 `uniubi_motion_client` 的业务封装，直接使用 robotServer 的完整通信协议：
+This mode bypasses the application wrappers in the bridge and `uniubi_motion_client` and uses the complete robotServer communication protocol directly:
 
 ```text
-RPC 请求/响应       查询、配置、控制权和动作控制
-Event               设备主动推送的状态变化
-数据 topic           motion observed、sensor observed
-TRC 控制 topic       高频实时控制帧
+RPC requests/responses   queries, configuration, control ownership, and action control
+Event                    device-initiated state changes
+data topics              motion observed, sensor observed
+TRC control topic        high-rate real-time control frames
 ```
 
-只读取某个原始 topic 时可以仅使用所需的数据通道；一旦进行动作或 TRC 控制，就必须同时正确
-实现 RPC 控制权生命周期和 Event 处理。普通业务不应把其中一个通道当作另一套独立接入方式。
+A read-only application may use only the required raw data channel. Once it performs action or TRC control, it must also implement the RPC control-ownership lifecycle and Event handling correctly. Typical applications must not treat one channel as an independent alternative to the protocol as a whole.
 
-### 原始数据 topic
+### Raw data topics
 
-应用直接订阅原始数据 topic，不经过 bridge 的标准消息转换。常用入口包括：
+Applications subscribe to raw data without the bridge's standard-message conversion. Common topics include:
 
 ```text
 /motion/observed
 /sensor/observed
 ```
 
-这条路径主要用于持续数据流。`/motion/observed` 和 `/sensor/observed` 默认关闭，
-需要先建立 reader，再通过 RPC 调用
-`setMotionObservedEnable` 开启，但该启用调用不要求持有运动控制权。
+These topics provide continuous data. Both are disabled by default. Create the reader first and then enable them with the `setMotionObservedEnable` RPC, which does not require motion control ownership.
 
-优点：
+Advantages:
 
-- 只读数据订阅不需要运动控制权；里程计通过 `SensorObserved.odom` 获取。
-- 保留设备错误码、有效位、原始时间戳和生命周期字段。
-- 适合验证 DDS 发现、消息类型、发布频率和 QoS。
+- Read-only subscriptions require no control ownership; odometry is available through `SensorObserved.odom`.
+- Device error codes, validity flags, raw timestamps, and lifecycle fields remain intact.
+- Suitable for validating DDS discovery, message types, publication rates, and QoS.
 
-缺点：
+Trade-offs:
 
-- 使用 UniUbi 自定义消息，而不是全部转换为社区标准消息。
-- 调用方需要正确设置 reliability、history depth 和 durability。
-- 原始时间戳、坐标和字段语义需要按协议解释。
+- Uses Uniubi custom messages rather than converting everything to community-standard messages.
+- Callers must configure reliability, history depth, and durability correctly.
+- Raw timestamps, coordinates, and field semantics must be interpreted according to the protocol.
 
-`/motion/trc` 是控制 topic，不属于普通只读数据流。直接发布 TRC 需要已有控制会话、正确的
-控制 ID 和持续发送约束；普通业务应使用 bridge 或 client。
+`/motion/trc` is a control topic, not an ordinary read-only stream. Publishing TRC directly requires an existing control session, a correct control ID, and continuous transmission. Typical applications should use the bridge or client instead.
 
-### RPC、Event 和控制
+### RPC, Event, and control
 
-应用直接使用 `uniubi/srv/System` 调用 robotServer。它适合查询能力、查询状态、验证新 RPC，
-以及定位问题发生在业务封装、client 还是 robotServer。
+Applications call robotServer directly through `uniubi/srv/System`. This is suitable for querying capabilities or state, validating a new RPC, and determining whether a problem is in the application wrapper, client, or robotServer.
 
-只读 RPC 不需要控制权。控制类 RPC 则要求调用方自行完成：
+Read-only RPCs require no control ownership. For control RPCs, the caller must implement:
 
 ```text
 takeMotionControl
-→ 保存 controller/lease/rawActionId
+→ retain controller/lease/rawActionId
 → renewMotionControl
-→ 解析 /robotServer/Event
-→ 控制调用
+→ parse /robotServer/Event
+→ make control calls
 → stopMotionAction
 → releaseMotionControl
 ```
 
-优点：
+Advantages:
 
-- 封装最少，可精确控制 service、method、JSON payload 和请求时序。
-- 新 RPC 不必先修改 client 或 bridge 就能验证。
-- 适合 wire contract 调试和协议开发。
+- Minimal wrapping and precise control over service, method, JSON payload, and request timing.
+- New RPCs can be validated before modifying the client or bridge.
+- Suitable for wire-contract debugging and protocol development.
 
-缺点：
+Trade-offs:
 
-- 需要自行处理 `device_id`、超时、返回码和 JSON schema。
-- 控制类 RPC 容易遗漏续约、被抢权处理和正常释放。
-- 接口接近底层协议，不适合作为普通业务代码的默认依赖。
+- Callers must manage `device_id`, timeouts, return codes, and JSON schemas.
+- Control RPC implementations can easily omit renewal, preemption handling, or normal release.
+- The interface is close to the low-level protocol and should not be a typical application's default dependency.
 
-协议直连的契约以
-[`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md)
-为准。普通业务开发者不应直接拼装控制 RPC。
+The direct protocol contract is defined in [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md). Typical application developers should not construct control RPCs directly.
 
-## 只读使用
+## Read-only use
 
-读取状态不等于取得运动控制权。
+Reading state is not the same as acquiring motion control.
 
-普通业务推荐启动 bridge 后订阅：
+Typical applications should launch the bridge and subscribe to:
 
 ```text
 /odom
@@ -193,13 +182,10 @@ takeMotionControl
 /motion/status
 ```
 
-需要完整原始字段时再使用协议直连中的原始 topic。bridge 标准观测和原始只读订阅都不需要调用
-`/motion/start_action`。
+Use raw direct-protocol topics only when complete raw fields are required. Neither standard bridge observations nor raw read-only subscriptions require `/motion/start_action`.
 
-## 不要混用多个控制入口
+## Do not mix control entry points
 
-同一机器人可以同时存在遥控器、App 和 SDK 类控制来源。每个部署建议只运行一个
-`uniubi_motion_bridge` 作为 ROS 2 高级控制入口。不要同时让多个 bridge、client 示例和协议
-直连控制程序竞争控制权。
+A robot may have a remote controller, mobile app, and SDK-based controllers at the same time. Run only one `uniubi_motion_bridge` as the ROS 2 High Level control entry point for each deployment. Do not let multiple bridges, client examples, and direct-protocol control programs compete for ownership.
 
-控制结束后应显式释放；服务端租约是异常退出兜底，不应代替正常收尾。
+Release control explicitly when finished. Server lease expiry is a fallback for abnormal termination, not a substitute for normal cleanup.

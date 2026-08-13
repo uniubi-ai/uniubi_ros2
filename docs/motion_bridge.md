@@ -1,14 +1,12 @@
-# Motion bridge 使用手册
+# Motion Bridge Guide
 
-`uniubi_motion_bridge` 面向普通 ROS 2 业务开发者。业务节点只使用公开 topic/service，不直接
-调用 `uniubi/srv/System`，也不需要链接 SDK 动态库。
+**English** | [简体中文](motion_bridge.zh-CN.md)
 
-> **功能范围：** bridge 当前以常用运动控制为主，并选择性提供里程计、关节、IMU、电池等
-> 标准 ROS 2 观测接口。它不是 High Level Client 或底层 DDS / ROS 2 直连接口的全量功能移植。
-> 是否支持某项能力，以本文列出的 topic、service 和参数为准；未列出的系统、音频、媒体、
-> 原始字段或新增协议能力可能尚未移植。
+`uniubi_motion_bridge` is intended for typical ROS 2 application developers. Application nodes use public topics and services only; they neither call `uniubi/srv/System` directly nor link an SDK shared library.
 
-## 启动
+> **Feature scope:** The bridge focuses on common motion control and selectively exposes standard ROS 2 observation interfaces for odometry, joints, IMU, and battery data. It is not a complete port of the High Level Client or low-level DDS / ROS 2 protocol. Support is defined by the topics, services, and parameters listed here. System, audio, media, raw fields, and newly added protocol capabilities not listed here may not yet be available.
+
+## Launch
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -25,110 +23,95 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`device_id` 必须填写，其值是 `/tmp/deviceInfo` 中的 `deviceNo`（机器人 SN），但它只用于
-RPC 路由。`/motion/observed`、`/sensor/observed` 和
-`/robotServer/Event` 等原始 topic 当前没有可供 bridge 过滤的设备身份；多条机器人共享同一
-DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条机器人使用独立的
-`ROS_DOMAIN_ID`。bridge 启动后只建立连接，不会立即申请高级运动控制权。
+`device_id` is required and must be the `deviceNo` (robot SN) from `/tmp/deviceInfo`, but it is used only for RPC routing. Raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event` currently contain no device identity that the bridge can filter. If multiple robots share one DDS Domain, observations or events from another robot may be mixed in. Assign a separate `ROS_DOMAIN_ID` to each robot. On startup, the bridge establishes a connection only and does not immediately acquire High Level motion control.
 
-bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()` 成功后，bridge 会在
-5 秒总超时内用只读、无副作用的 `getMotionCapabilities` 检查双向 RPC 链路，单次 RPC
-最长等待 500 ms，失败后间隔 200 ms 重试。首次收到成功响应后，才启用运动观测和状态查询，
-并在 `/motion/status` 中报告 `CONNECTED`。如果本次就绪检查超时，bridge 不主动断开 SDK
-连接；后续 service 请求会重新执行一轮有限时的就绪检查。
+Discovering the DDS service is not treated as connection readiness. After SDK `connect()` succeeds, the bridge checks the bidirectional RPC path with the read-only, side-effect-free `getMotionCapabilities` call for up to five seconds. Each RPC waits at most 500 ms, with 200 ms between retries. Only after the first successful response does it enable motion observations and state queries and report `CONNECTED` on `/motion/status`. If the readiness check times out, the bridge does not actively disconnect the SDK; a later service request runs another bounded readiness check.
 
-如果设备有多个网卡，还必须设置 `CYCLONEDDS_URI`，明确选择机器人所在网卡。
+On machines with multiple network interfaces, set `CYCLONEDDS_URI` to select the interface connected to the robot.
 
 ## Services
 
-| 名称 | 类型 | 行为 |
+| Name | Type | Behavior |
 |---|---|---|
-| `/motion/start_action` | `uniubi_motion_bridge/srv/StartMotionAction` | 必要时自动取权，然后启动指定动作 |
-| `/motion/stop_action` | `std_srvs/srv/Trigger` | 发送 `stopAction`，继续持权和续约 |
-| `/motion/release_control` | `std_srvs/srv/Trigger` | 先停止动作，再释放控制权；重复调用幂等 |
-| `/motion/emergency_stop` | `std_srvs/srv/Trigger` | 发送高级运控急停；必须已经持权 |
-| `/motion/query_capabilities` | `std_srvs/srv/Trigger` | 返回当前机型的动作和参数能力 JSON |
+| `/motion/start_action` | `uniubi_motion_bridge/srv/StartMotionAction` | Acquires control if necessary, then starts the requested action |
+| `/motion/stop_action` | `std_srvs/srv/Trigger` | Sends `stopAction` while retaining and renewing control |
+| `/motion/release_control` | `std_srvs/srv/Trigger` | Stops the action, then releases control; repeated calls are idempotent |
+| `/motion/emergency_stop` | `std_srvs/srv/Trigger` | Sends a High Level emergency stop; control must already be held |
+| `/motion/query_capabilities` | `std_srvs/srv/Trigger` | Returns the current robot model's action and parameter capabilities as JSON |
 
-没有公开的 `take_control` service。取权由 `/motion/start_action` 在需要时自动完成。
+There is no public `take_control` service. `/motion/start_action` acquires control automatically when needed.
 
-Service 返回成功只代表服务端接受请求，不代表机械动作已经完成。
+A successful service response means that the server accepted the request, not that the physical motion has finished.
 
 ## Topics
 
-| 名称 | 类型 | QoS/频率 | 说明 |
+| Name | Type | QoS / rate | Description |
 |---|---|---|---|
-| `/motion/status` | `uniubi_motion_bridge/msg/MotionStatus` | Reliable、Transient Local，默认 10 Hz | 实际动作、速度、控制状态和最近错误 |
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | Best Effort、Keep Last 1，默认最多 30 Hz 转发 | 当前动作参数输入 |
-| `/odom` | `nav_msgs/msg/Odometry` | Best Effort、Keep Last 1 | 有效 Walk 累计里程计 |
-| `/joint_states` | `sensor_msgs/msg/JointState` | Best Effort、Keep Last 1 | 关节角、速度和力矩 |
-| `/imu/data` | `sensor_msgs/msg/Imu` | Sensor Data QoS | 姿态、角速度和线加速度 |
-| `/battery_state` | `sensor_msgs/msg/BatteryState` | Sensor Data QoS，默认 1 Hz | 电压、电流、温度和电量 |
+| `/motion/status` | `uniubi_motion_bridge/msg/MotionStatus` | Reliable, Transient Local, 10 Hz by default | Actual action, velocities, control state, and latest error |
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | Best Effort, Keep Last 1; forwarded at up to 30 Hz by default | Parameters for the current action |
+| `/odom` | `nav_msgs/msg/Odometry` | Best Effort, Keep Last 1 | Valid accumulated Walk odometry |
+| `/joint_states` | `sensor_msgs/msg/JointState` | Best Effort, Keep Last 1 | Joint position, velocity, and effort |
+| `/imu/data` | `sensor_msgs/msg/Imu` | Sensor Data QoS | Orientation, angular velocity, and linear acceleration |
+| `/battery_state` | `sensor_msgs/msg/BatteryState` | Sensor Data QoS, 1 Hz by default | Voltage, current, temperature, and charge |
 
-## 标准控制流程
+## Standard control flow
 
 ```text
-启动 bridge
+start bridge
 → connected
 → /motion/start_action
-→ 自动 takeMotionControl + 自动维护租约
-→ 使用 /cmd_vel 或继续 start_action
-→ /motion/stop_action（可选）
+→ automatic takeMotionControl + automatic lease maintenance
+→ use /cmd_vel or call start_action again
+→ /motion/stop_action (optional)
 → /motion/release_control
 → connected
 ```
 
-如果 `start_action` 为本次调用新取得控制权但动作启动失败，bridge 会尝试回滚释放该会话。
-正常退出时 bridge 也会尽力停止动作并释放控制权；异常退出由服务端租约超时兜底。
+If `start_action` acquired control for the current call but failed to start the action, the bridge attempts to roll back and release that session. During normal shutdown, it also makes a best effort to stop the action and release control. Server lease expiry protects against abnormal termination.
 
-## 启动动作
+## Start an action
 
-先查询当前机型能力：
+Query the current robot's capabilities first:
 
 ```bash
 ros2 service call /motion/query_capabilities std_srvs/srv/Trigger '{}'
 ```
 
-再调用统一动作接口：
+Then call the unified action interface:
 
 ```bash
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
   "{action: walking, params_json: '{}'}"
 ```
 
-bridge 不为 standing、laying、walking 等动作分别创建 service。动作名和参数范围由服务端能力
-列表决定并由服务端校验。
+The bridge does not define separate services for standing, laying, walking, and other actions. The server capability list defines available action names and parameter ranges, and the server performs validation.
 
-`standing` 不能从 `laying`（趴下）状态直接触发。实际可用动作及状态切换关系仍以
-`/motion/query_capabilities` 返回结果为准。
+`standing` cannot be triggered directly from the `laying` state. Treat `/motion/query_capabilities` as authoritative for available actions and transitions.
 
 ## `/cmd_vel`
 
-字段映射：
+Field mappings:
 
-| ROS 2 字段 | 高级动作参数 |
+| ROS 2 field | High Level action parameter |
 |---|---|
 | `linear.x` | `lineVelocityX` |
 | `linear.y` | `lineVelocityY` |
 | `angular.z` | `velocity` |
 
-`linear.y` 和 UniUbi `lineVelocityY` 都遵循“正左负右”定义，bridge 不做
-符号转换。`/motion/status.line_velocity_y` 也使用相同方向定义。
+`linear.y` and Uniubi `lineVelocityY` both use positive-left/negative-right. The bridge does not invert the sign, and `/motion/status.line_velocity_y` follows the same convention.
 
-bridge 不根据 `/motion/status` 判断当前动作，也不在 bridge 内按动作范围限幅。它把三个有限数值
-直接交给 `setActionParams`，鉴权、动作参数匹配和安全限制由 client/服务端处理。因此
-`/cmd_vel`：
+The bridge does not infer the current action from `/motion/status` or clamp values to action-specific ranges. It passes the three finite values directly to `setActionParams`; the client/server handles authorization, action-parameter matching, and safety limits. Therefore `/cmd_vel`:
 
-- 不申请控制权。
-- 不启动或切换动作。
-- 不逐条返回响应；最近失败反映在 `/motion/status`。
-- 高频消息只保留最新值，并按 `cmd_vel_rate_hz` 限制 RPC 下发频率。
+- Does not acquire control.
+- Does not start or switch actions.
+- Does not return a response for each message; the latest failure appears in `/motion/status`.
+- Retains only the latest high-rate message and limits RPC delivery using `cmd_vel_rate_hz`.
 
-超过 `cmd_vel_timeout_ms` 未收到新消息时，bridge 发送一次三个速度字段均为零的参数，不调用
-`stopAction`，也不释放控制权。服务端还有独立的控制帧超时保护。
+If no new message arrives within `cmd_vel_timeout_ms`, the bridge sends one parameter set with all three velocity fields at zero. It does not call `stopAction` or release control. The server independently protects against control-frame timeouts.
 
 ## `/motion/status`
 
-消息包含：
+The message contains:
 
 ```text
 stamp
@@ -141,53 +124,48 @@ last_error_code
 last_error_message
 ```
 
-状态有两个更新来源：
+State has two update sources:
 
-- bridge 以 `motion_status_rate_hz`（默认 10 Hz）调用只读 `queryMotionState`，更新实际动作和速度。
-- 内部 `/robotServer/Event` 在控制权被抢占等事件发生时立即更新控制状态和错误。
+- The bridge calls the read-only `queryMotionState` at `motion_status_rate_hz` (10 Hz by default) to update actual action and velocity.
+- Internal `/robotServer/Event` handling updates control state and errors immediately for events such as control preemption.
 
-原始 Event JSON 不对外发布；未知事件只写 DEBUG 日志。10 Hz 是状态快照，最多存在一个查询
-周期的显示延迟，不保证记录持续时间短于 100 ms 的每个中间动作。
+Raw Event JSON is not published; unknown events are written to DEBUG logs only. The 10 Hz state is a snapshot that can lag by one query period and does not guarantee that every intermediate action shorter than 100 ms is recorded.
 
-## `stop_action` 的语义
+## `stop_action` semantics
 
-`stop_action` 不等于“切换到 standing”，也不等于释放控制权。
+`stop_action` does not mean “switch to standing,” and it does not release control.
 
-对 walking 调用 `stop_action` 时，服务端通常保留 walking 动作并把速度清零。许多一次性动作
-结束后也会回到 walking。当前实际动作应以 `/motion/status.current_action` 为准。
+For walking, the server generally keeps the walking action active and sets velocity to zero. Many one-shot actions also return to walking when they finish. Use `/motion/status.current_action` as the source of truth for the current action.
 
-如果业务明确要求站立，应显式调用：
+To explicitly request standing:
 
 ```bash
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
   "{action: standing, params_json: '{}'}"
 ```
 
-## 观测接口
+## Observation interfaces
 
-`/joint_states`、`/imu/data` 和 `/battery_state` 来自原始 `/motion/observed`，不要求运动控制权。
+`/joint_states`, `/imu/data`, and `/battery_state` come from raw `/motion/observed` and do not require motion control ownership.
 
-- `/joint_states` 优先使用服务端电机布局；当前固件不支持布局 RPC 时可通过配置提供机型 fallback。
-- `JointState.effort` 使用设备电机 torque。
-- IMU 加速度或角速度无效时不发布；四元数无效时将 `orientation_covariance[0]` 设为 `-1`。
-- `BatteryState.percentage` 把设备 0-100 电量换算为 ROS 2 的 0-1。
-- `/odom` 使用设备端已累计的 position/yaw，上层不能再次积分，当前不发布 TF。
-  里程计的 `position.y` 和 `twist.linear.y` 同样使用“正左负右”，bridge 原样发布。
+- `/joint_states` prefers the server motor layout. If the current firmware lacks the layout RPC, a robot-model fallback can be configured.
+- `JointState.effort` uses device motor torque.
+- `/imu/data` is not published when acceleration or angular velocity is invalid. If the quaternion is invalid, `orientation_covariance[0]` is set to `-1`.
+- `BatteryState.percentage` converts the device's 0–100 charge value to the ROS 2 range 0–1.
+- `/odom` uses the device's accumulated position and yaw. Consumers must not integrate it again. TF is not currently published. `position.y` and `twist.linear.y` remain positive-left/negative-right without conversion.
 
-完整原始错误码、在线状态和温度仍以 `/motion/observed` 为准，里程计生命周期字段以
-`/sensor/observed` 中的 `odom` 为准。
+Use raw `/motion/observed` for complete fault codes, online state, and temperature. Use `/sensor/observed.odom` for odometry lifecycle fields.
 
-## 主要参数
+## Main parameters
 
-| 参数 | 默认值 | 说明 |
+| Parameter | Default | Description |
 |---|---|---|
-| `device_id` | 空 | 目标机器人 `deviceNo` / SN；必须填写 |
-| `lease_ms` | `60000` | 申请控制权时请求的租约 |
-| `auto_connect` | `true` | 启动后是否自动连接 robotServer |
-| `cmd_vel_timeout_ms` | `500` | ROS 2 速度输入超时 |
-| `cmd_vel_rate_hz` | `30.0` | 最大参数 RPC 下发频率；上游可更高频发布，bridge 仅转发最新值 |
-| `motion_status_rate_hz` | `10.0` | 实际动作状态查询频率 |
-| `battery_publish_rate_hz` | `1.0` | 电池状态发布频率 |
+| `device_id` | empty | Target robot `deviceNo` / SN; required |
+| `lease_ms` | `60000` | Requested lease when acquiring control |
+| `auto_connect` | `true` | Whether to connect to robotServer automatically at startup |
+| `cmd_vel_timeout_ms` | `500` | ROS 2 velocity-input timeout |
+| `cmd_vel_rate_hz` | `30.0` | Maximum parameter-RPC rate; upstream publishers may run faster, but only the latest value is forwarded |
+| `motion_status_rate_hz` | `10.0` | Actual motion-state query rate |
+| `battery_publish_rate_hz` | `1.0` | Battery-state publication rate |
 
-其余 topic、frame 和电机布局参数见
-`src/uniubi_motion_bridge/config/motion_bridge.yaml`。
+See `src/uniubi_motion_bridge/config/motion_bridge.yaml` for the remaining topic, frame, and motor-layout parameters.
