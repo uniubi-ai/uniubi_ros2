@@ -61,7 +61,7 @@ public:
   {
     sdk_config_file_ = declare_parameter<std::string>("sdk_config_file", "");
     client_id_ = declare_parameter<std::string>("client_id", "uniubiMediaDriver");
-    sdk_init_timeout_s_ = declare_parameter<int>("sdk_init_timeout_s", 30);
+    sdk_init_timeout_ms_ = declare_parameter<int>("sdk_init_timeout_ms", 30000);
     connect_timeout_ms_ = declare_parameter<int>("connect_timeout_ms", 5000);
     topic_prefix_ = declare_parameter<std::string>("topic_prefix", "");
     camera_names_ = declare_parameter<std::vector<std::string>>(
@@ -133,7 +133,7 @@ private:
       throw std::runtime_error(
               "camera_names, camera_channels, and frame_ids must have the same length");
     }
-    if (sdk_init_timeout_s_ < 1 || connect_timeout_ms_ < 1) {
+    if (sdk_init_timeout_ms_ < 1 || connect_timeout_ms_ < 1) {
       throw std::runtime_error("SDK and connection timeouts must be positive");
     }
 
@@ -180,7 +180,7 @@ private:
 
     const char * config = sdk_config_file_.empty() ? nullptr : sdk_config_file_.c_str();
     if (!service_->initialService(
-        config, client_id_.c_str(), static_cast<uint32_t>(sdk_init_timeout_s_)))
+        config, client_id_.c_str(), static_cast<uint32_t>(sdk_init_timeout_ms_)))
     {
       throw std::runtime_error("Motion SDK initialization failed");
     }
@@ -306,7 +306,7 @@ private:
 
   std::string sdk_config_file_;
   std::string client_id_;
-  int sdk_init_timeout_s_ = 30;
+  int sdk_init_timeout_ms_ = 30000;
   int connect_timeout_ms_ = 5000;
   std::string topic_prefix_;
   std::vector<std::string> camera_names_;
