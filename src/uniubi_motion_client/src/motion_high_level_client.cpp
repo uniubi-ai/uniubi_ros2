@@ -22,6 +22,9 @@ constexpr const char * kHostEventTopic = "robotServer.host.event";
 constexpr const char * kControlStatusTopic = "robotServer.control.status";
 constexpr std::uint32_t kEventMagic = 0x53425645U;
 constexpr int32_t kDefaultLeaseMs = 60000;
+constexpr int32_t kMasterSwitchRpcTimeoutMs = 5000;
+constexpr int32_t kMasterSwitchRetryMs = 1000;
+constexpr int32_t kMasterSwitchWaitMs = 3000;
 constexpr int32_t kRenewTimeoutMs = 3000;
 constexpr int32_t kRenewTimerPeriodMs = 200;
 
@@ -157,6 +160,57 @@ bool MotionHighLevelClient::startControl(int32_t timeout_ms)
     return true;
   }
 
+  const auto deadline = std::chrono::steady_clock::now() + timeout_from_ms(timeout_ms);
+  const auto fail_acquire = [this]() {
+    set_error(kRpcAcquireRejected);
+    if (connect_callback_) {
+      connect_callback_(kConnected, kRpcAcquireRejected);
+    }
+    return false;
+  };
+
+  // Match the official High-level SDK acquisition sequence: first restore the
+  // built-in cerebellum controller as motor master, wait for the asynchronous
+  // switch to settle, and only then acquire the High-level RPC session.
+  Json::Value master_params(Json::objectValue);
+  master_params["master"] = "cerebellum";
+  Json::Value master_ret;
+  while (true) {
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) {
+      return fail_acquire();
+    }
+    const auto remaining_ms = std::max<int64_t>(
+      1,
+      std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count());
+    const auto rpc_timeout_ms = static_cast<int32_t>(std::min<int64_t>(
+      remaining_ms, kMasterSwitchRpcTimeoutMs));
+    if (rpc_call(
+        "setMotionMasterRole",
+        client_id(),
+        master_params,
+        master_ret,
+        rpc_timeout_ms,
+        "setMotionMasterRole"))
+    {
+      break;
+    }
+
+    const auto retry_at = std::chrono::steady_clock::now();
+    if (retry_at >= deadline) {
+      return fail_acquire();
+    }
+    std::this_thread::sleep_for(std::min(
+      std::chrono::milliseconds(kMasterSwitchRetryMs),
+      std::chrono::duration_cast<std::chrono::milliseconds>(deadline - retry_at)));
+  }
+
+  const auto switched_at = std::chrono::steady_clock::now();
+  if (switched_at + std::chrono::milliseconds(kMasterSwitchWaitMs) >= deadline) {
+    return fail_acquire();
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(kMasterSwitchWaitMs));
+
   Json::Value params(Json::objectValue);
   params["cmdMode"] = true;
   if (lease_ms_ > 0) {
@@ -164,27 +218,26 @@ bool MotionHighLevelClient::startControl(int32_t timeout_ms)
   }
 
   Json::Value ret;
+  const auto take_at = std::chrono::steady_clock::now();
+  if (take_at >= deadline) {
+    return fail_acquire();
+  }
+  const auto take_timeout_ms = static_cast<int32_t>(std::max<int64_t>(
+    1,
+    std::chrono::duration_cast<std::chrono::milliseconds>(deadline - take_at).count()));
   if (!rpc_call(
       "takeMotionControl",
       client_id(),
       params,
       ret,
-      timeout_ms,
+      take_timeout_ms,
       "takeMotionControl"))
   {
-    set_error(kRpcAcquireRejected);
-    if (connect_callback_) {
-      connect_callback_(kConnected, kRpcAcquireRejected);
-    }
-    return false;
+    return fail_acquire();
   }
 
   if (!ret.isObject() || !ret.isMember("controller") || !ret["controller"].isString()) {
-    set_error(kRpcAcquireRejected);
-    if (connect_callback_) {
-      connect_callback_(kConnected, kRpcAcquireRejected);
-    }
-    return false;
+    return fail_acquire();
   }
 
   controller_ = ret["controller"].asString();

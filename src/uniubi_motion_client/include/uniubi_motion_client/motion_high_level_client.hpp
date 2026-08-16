@@ -147,6 +147,7 @@ public:
   /**
    * @brief 申请高级运动控制权。
    *
+   * 先将电机运控 master 切回内置小脑并等待切换稳定，再申请 High-level RPC 会话。
    * 成功后保存服务端返回的 controller/rawActionId，状态切为 kControlled，
    * 并启动租约维护定时器；成功控制调用会刷新租约，控制空闲时才发送 renewMotionControl。
    */

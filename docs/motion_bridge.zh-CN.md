@@ -51,7 +51,9 @@ bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()`
 | `/motion/emergency_stop` | `std_srvs/srv/Trigger` | 发送高级运控急停；必须已经持权 |
 | `/motion/query_capabilities` | `std_srvs/srv/Trigger` | 返回当前机型的动作和参数能力 JSON |
 
-没有公开的 `take_control` service。取权由 `/motion/start_action` 在需要时自动完成。
+没有公开的 `take_control` service。取权由 `/motion/start_action` 在需要时自动完成。首次取权会先
+请求将电机运控 master 切回内置小脑，等待切换稳定后再申请 High-level RPC 会话；任一步失败时
+动作都不会下发，service 会返回失败。
 
 Service 返回成功只代表服务端接受请求，不代表机械动作已经完成。
 

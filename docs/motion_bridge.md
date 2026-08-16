@@ -40,6 +40,9 @@ On machines with multiple network interfaces, set `CYCLONEDDS_URI` to select the
 | `/motion/query_capabilities` | `std_srvs/srv/Trigger` | Returns the current robot model's action and parameter capabilities as JSON |
 
 There is no public `take_control` service. `/motion/start_action` acquires control automatically when needed.
+Before acquiring the High-level RPC session for the first time, the bridge restores the built-in cerebellum
+as motor-control master and waits for the asynchronous switch to settle. The action is not sent if either
+step fails.
 
 A successful service response means that the server accepted the request, not that the physical motion has finished.
 
