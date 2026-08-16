@@ -146,6 +146,9 @@ bridge 启动后只连接 robotServer，不会立即申请运动控制权。第�
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
   "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
 
+ros2 topic pub --rate 20 --times 40 /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 0.5, y: 0.0}, angular: {z: 0.0}}'
+
 ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
   '{linear: {x: 0.0, y: 0.0}, angular: {z: 0.0}}'
 
