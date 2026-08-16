@@ -144,10 +144,10 @@ bridge 启动后只连接 robotServer，不会立即申请运动控制权。第�
 
 ```bash
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
-  "{action: walking, params_json: '{}'}"
+  "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
 
-ros2 topic pub --rate 50 /cmd_vel geometry_msgs/msg/Twist \
-  '{linear: {x: 0.5, y: 0.0}, angular: {z: 0.0}}'
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 0.0, y: 0.0}, angular: {z: 0.0}}'
 
 ros2 service call /motion/stop_action std_srvs/srv/Trigger '{}'
 ros2 service call /motion/release_control std_srvs/srv/Trigger '{}'
@@ -233,10 +233,16 @@ topic 存在订阅者时启动该路码流。
 
 ## 安全
 
-首次实机联调建议先验证只读 topic，再验证站立、趴下等低风险动作。walking、双足、倒立和
-`jump*` 等动作必须在空旷场地、急停可用并有人值守的条件下测试。
+首次 High-level 实机联调建议先验证只读 topic，再用三个速度字段均显式为 0 的 `walking`
+验证取权、动作启动和状态反馈。`standing` / `laying` 受当前姿态和服务端状态机约束，不能
+作为通用的往返测试流程。带非零速度的 walking、双足、倒立和 `jump*` 等动作必须在空旷
+场地、急停可用并有人值守的条件下测试。
 
 `stop_action` 不等于释放控制权；业务结束后应显式调用 `/motion/release_control`。
+
+`stop_action` 会停止当前动作，并异步将实际动作切回零速 `walking`，同时继续保留控制权。显式启动
+三个参数均为 0 的 `walking` 也可以完成同样的动作切换。`/cmd_vel` 会修改当前动作支持的速度参数
+（包括 `bipedStand`、`handstand` 等动作），但不会切换或停止动作。
 
 ## 许可证
 

@@ -50,7 +50,9 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 - 高频输入会合并为最新值，并按 `cmd_vel_rate_hz`（默认 30 Hz）限频。
 - 成功的 `startAction`、`setActionParams`、`stopAction` 和 `emergencyStop` 会刷新服务端控制租约；
   client 仅在这些控制 RPC 空闲达到续约周期后发送 `renewMotionControl`。失败或超时的 RPC 不计为续约。
-- `stop_action` 只停止动作并继续持权续约；`release_control` 与进程退出会先停止动作再释放控制会话。
+- `stop_action` 会停止当前动作，将实际动作切回 `walking` 并把 walking 三轴速度清零，同时继续持权续约。
+  显式启动全零参数的 `walking` 也可以完成同样的动作切换；两者都是异步操作。`release_control`
+  与进程退出会先停止动作再释放控制会话。
 
 `/odom` 仅转发 `valid=true` 的设备累计里程计，不再次积分，也暂不发布 TF。
 `position.y` 和 `twist.linear.y` 均为正左负右，bridge 不做符号转换。原始生命周期字段仍以
@@ -106,6 +108,10 @@ ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前�
 ## HighLevel 动作是异步的
 
 `startAction`、`stopAction` 等 RPC 返回成功，只代表机器人已接受请求，不代表真实动作已经完成。
+
+`stopAction` 收尾后实际动作是零速 `walking`；显式启动全零参数的 `walking` 也会结束当前动作。
+`/cmd_vel` 会修改当前动作暴露的速度参数（包括 `bipedStand`、`handstand` 等动作），但不执行
+这两种动作切换。
 
 运动测试收尾建议：
 

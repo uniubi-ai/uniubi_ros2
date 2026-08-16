@@ -40,7 +40,7 @@ Read-only queries do not require control ownership. For control RPCs, the caller
 - An input timeout sends one set of zero values for all three velocity fields. It does not stop the action or release control.
 - High-rate input is coalesced to the latest value and limited by `cmd_vel_rate_hz` (30 Hz by default).
 - Successful `startAction`, `setActionParams`, `stopAction`, and `emergencyStop` calls refresh the server-side control lease. The client sends `renewMotionControl` only when control RPCs have been idle for a renewal interval. Failed or timed-out RPCs do not count as renewal.
-- `stop_action` stops the action while retaining and renewing control. `release_control` and process shutdown stop the action before releasing the control session.
+- `stop_action` stops every current action, returns the effective action to `walking`, and zeros all three walking velocities while retaining and renewing control. Starting `walking` with full zero parameters provides the equivalent explicit action transition. Both are asynchronous; `release_control` and process shutdown stop the action before releasing the control session.
 
 `/odom` forwards only device-accumulated odometry with `valid=true`. It does not integrate again and currently publishes no TF. `position.y` and `twist.linear.y` remain positive-left/negative-right without bridge conversion. The raw lifecycle fields remain available in `/sensor/observed.odom`.
 
@@ -89,6 +89,8 @@ New or extended ROS 2 examples should use these entry points so that request `de
 ## High Level actions are asynchronous
 
 A successful `startAction` or `stopAction` RPC means that the robot accepted the request, not that the physical motion has finished.
+
+`stopAction` completes by returning the effective action to zero-speed `walking`. Starting `walking` with full zero parameters also ends the current action. `/cmd_vel` updates the mapped velocity parameters exposed by the current action (including actions such as `bipedStand` and `handstand`) and does not perform either transition.
 
 Recommended shutdown sequence for motion tests:
 

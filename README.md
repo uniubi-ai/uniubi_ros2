@@ -125,10 +125,10 @@ A minimal control sequence:
 
 ```bash
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
-  "{action: walking, params_json: '{}'}"
+  "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
 
-ros2 topic pub --rate 50 /cmd_vel geometry_msgs/msg/Twist \
-  '{linear: {x: 0.5, y: 0.0}, angular: {z: 0.0}}'
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 0.0, y: 0.0}, angular: {z: 0.0}}'
 
 ros2 service call /motion/stop_action std_srvs/srv/Trigger '{}'
 ros2 service call /motion/release_control std_srvs/srv/Trigger '{}'
@@ -209,9 +209,14 @@ See the [documentation reading guide](docs/README.md) for additional navigation.
 
 ## Safety
 
-For initial hardware integration, validate read-only topics first, then low-risk actions such as standing and laying. Test walking, bipedal stance, handstands, and `jump*` actions only in an open area with an accessible emergency stop and an operator present.
+For initial High Level hardware integration, validate read-only topics first, then validate ownership, action startup, and status feedback by starting `walking` with all three velocity fields explicitly set to zero. `standing` and `laying` depend on the current posture and the server state machine, so they are not a universal round-trip test. Test walking with nonzero velocity, bipedal stance, handstands, and `jump*` actions only in an open area with an accessible emergency stop and an operator present.
 
 `stop_action` does not release control. Call `/motion/release_control` explicitly when the application finishes.
+
+`stop_action` stops the current action and asynchronously returns the effective action to zero-speed
+`walking` while retaining control. Starting `walking` with full zero parameters is the equivalent explicit
+transition. `/cmd_vel` updates the current action's supported velocity parameters (including actions such as
+`bipedStand` and `handstand`) but does not switch or stop the action.
 
 ## License
 

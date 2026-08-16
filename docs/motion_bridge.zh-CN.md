@@ -94,12 +94,14 @@ ros2 service call /motion/query_capabilities std_srvs/srv/Trigger '{}'
 
 ```bash
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
-  "{action: walking, params_json: '{}'}"
+  "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
 ```
 
 bridge 不为 standing、laying、walking 等动作分别创建 service。动作名和参数范围由服务端能力
 列表决定并由服务端校验。
 
+首次 High-level 实机动作验证建议使用上面的全零 `walking` 请求，再通过
+`/motion/status` 确认 `current_action` 和三个速度字段。不要用空 JSON 隐式依赖默认零值。
 `standing` 不能从 `laying`（趴下）状态直接触发。实际可用动作及状态切换关系仍以
 `/motion/query_capabilities` 返回结果为准。
 
@@ -155,8 +157,19 @@ last_error_message
 
 `stop_action` 不等于“切换到 standing”，也不等于释放控制权。
 
-对 walking 调用 `stop_action` 时，服务端通常保留 walking 动作并把速度清零。许多一次性动作
-结束后也会回到 walking。当前实际动作应以 `/motion/status.current_action` 为准。
+对当前 capabilities 暴露的所有动作，调用 `stop_action` 都会执行动作收尾，并将实际动作切回
+`walking`，同时把 walking 三轴速度清零。控制权仍会保留并续约。这个切换是异步的，当前实际动作
+和速度应以 `/motion/status.current_action` 及其速度字段为准。
+
+也可以通过显式切换到全零参数的 `walking` 来结束当前动作并进入零速 walking：
+
+```bash
+ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
+  "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
+```
+
+`/cmd_vel` 会修改当前动作所暴露的速度参数；如果当前动作支持这些字段，`walking`、`bipedStand`、
+`handstand` 等动作都可以接收速度输入。它不会切换动作，也不能单独停止动作。
 
 如果业务明确要求站立，应显式调用：
 

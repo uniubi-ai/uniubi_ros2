@@ -81,11 +81,12 @@ Then call the unified action interface:
 
 ```bash
 ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
-  "{action: walking, params_json: '{}'}"
+  "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
 ```
 
 The bridge does not define separate services for standing, laying, walking, and other actions. The server capability list defines available action names and parameter ranges, and the server performs validation.
 
+For the first High Level hardware action check, use the all-zero `walking` request above, then confirm `current_action` and all three velocity fields on `/motion/status`. Do not rely on an empty JSON object to imply zero defaults.
 `standing` cannot be triggered directly from the `laying` state. Treat `/motion/query_capabilities` as authoritative for available actions and transitions.
 
 ## `/cmd_vel`
@@ -135,7 +136,18 @@ Raw Event JSON is not published; unknown events are written to DEBUG logs only. 
 
 `stop_action` does not mean “switch to standing,” and it does not release control.
 
-For walking, the server generally keeps the walking action active and sets velocity to zero. Many one-shot actions also return to walking when they finish. Use `/motion/status.current_action` as the source of truth for the current action.
+For every action exposed by the current capabilities, `stop_action` runs the action's stop/finalization path and returns the effective action to `walking` with all three walking velocities set to zero. Control is retained and renewed. The transition is asynchronous; use `/motion/status.current_action` and the velocity fields as the source of truth.
+
+Starting `walking` explicitly with full zero parameters is the other supported way to end the current action and enter the zero-speed walking state:
+
+```bash
+ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionAction \
+  "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
+```
+
+`/cmd_vel` updates the mapped velocity parameters of the current action when that action exposes them
+(for example, `walking`, `bipedStand`, or `handstand`); it does not switch actions. It cannot stop an
+action by itself.
 
 To explicitly request standing:
 
