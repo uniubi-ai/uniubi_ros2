@@ -214,6 +214,8 @@ See the [documentation reading guide](docs/README.md) for additional navigation.
 
 Before a real-robot High Level action test, disconnect the remote controller: either power it off, or press and hold its `M` button until the robot announces “遥控器连接已断开” (remote controller disconnected). While it remains connected, the bridge cannot obtain High Level control ownership. Read-only topics do not require this step.
 
+In an emergency during High Level control, press `M` again and wait until the robot announces “遥控器已连接” (remote controller connected) before using the remote controller to take over.
+
 For initial High Level hardware integration, validate read-only topics first, then validate ownership, action startup, and status feedback by starting `walking` with all three velocity fields explicitly set to zero. `standing` and `laying` depend on the current posture and the server state machine, so they are not a universal round-trip test. Test walking with nonzero velocity, bipedal stance, handstands, and `jump*` actions only in an open area with an accessible emergency stop and an operator present.
 
 `stop_action` does not release control. Call `/motion/release_control` explicitly when the application finishes.
