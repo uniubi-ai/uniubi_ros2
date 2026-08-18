@@ -86,6 +86,8 @@ bridge 是唯一的高级运控客户端，内部完成连接、按需取权、�
 → disconnect()
 ```
 
+对于直接使用 `uniubi_motion_client` 的路径，`releaseControl()` 和 `disconnect()` 不会隐式停止活动动作；应先调用 `stopAction()`，并通过状态轮询确认异步切换完成。
+
 优点：
 
 - 可以使用比 bridge 更完整的高级运控、系统、音频和原始 TRC 接口。

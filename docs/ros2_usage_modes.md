@@ -79,6 +79,8 @@ create ROS 2 node and executor
 → disconnect()
 ```
 
+For the direct `uniubi_motion_client` path, `releaseControl()` and `disconnect()` do not implicitly stop an active action; call `stopAction()` first and use state polling to confirm the asynchronous transition.
+
 Advantages:
 
 - Exposes more complete High Level motion, system, audio, and raw TRC interfaces than the bridge.

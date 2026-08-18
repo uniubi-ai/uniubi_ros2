@@ -25,7 +25,7 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
 
 `device_id` is required and must be the `deviceNo` (robot SN) from `/tmp/deviceInfo`, but it is used only for RPC routing. Raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event` currently contain no device identity that the bridge can filter. If multiple robots share one DDS Domain, observations or events from another robot may be mixed in. Assign a separate `ROS_DOMAIN_ID` to each robot. On startup, the bridge establishes a connection only and does not immediately acquire High Level motion control.
 
-Discovering the DDS service is not treated as connection readiness. After SDK `connect()` succeeds, the bridge checks the bidirectional RPC path with the read-only, side-effect-free `getMotionCapabilities` call for up to five seconds. Each RPC waits at most 500 ms, with 200 ms between retries. Only after the first successful response does it enable motion observations and state queries and report `CONNECTED` on `/motion/status`. If the readiness check times out, the bridge does not actively disconnect the SDK; a later service request runs another bounded readiness check.
+Discovering the DDS service is not treated as connection readiness. After SDK `connect()` succeeds, the bridge checks the bidirectional RPC path with the read-only, side-effect-free `getMotionCapabilities` call for up to five seconds. Each RPC waits at most 500 ms, with 200 ms between retries. Only after the first successful response does it enable motion observations and state queries and report `CONNECTED` on `/motion/status`. In the current implementation, the enable RPC completes before the raw observation subscriptions are created, so the first observation frames may be lost. This is a known implementation detail; direct DDS clients should still use the protocol's reader-first order. If the readiness check times out, the bridge does not actively disconnect the SDK; a later service request runs another bounded readiness check.
 
 On machines with multiple network interfaces, set `CYCLONEDDS_URI` to select the interface connected to the robot.
 
@@ -87,7 +87,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
   "{action: walking, params_json: '{\"lineVelocityX\":0.0,\"lineVelocityY\":0.0,\"velocity\":0.0}'}"
 ```
 
-The bridge does not define separate services for standing, laying, walking, and other actions. The server capability list defines available action names and parameter ranges, and the server performs validation.
+The bridge does not define separate services for standing, laying, walking, and other actions. The server capability list defines available action names and parameter ranges, and the server performs validation. After control acquisition, the bridge forwards the requested action directly; it does not automatically insert the recommended zero-velocity `walking` transition or poll `current_action` for the caller.
 
 For the first High Level hardware action check, use the all-zero `walking` request above, then confirm `current_action` and all three velocity fields on `/motion/status`. Do not rely on an empty JSON object to imply zero defaults.
 `standing` cannot be triggered directly from the `laying` state. Treat `/motion/query_capabilities` as authoritative for available actions and transitions.

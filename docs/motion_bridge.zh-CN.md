@@ -36,8 +36,9 @@ DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条
 bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()` 成功后，bridge 会在
 5 秒总超时内用只读、无副作用的 `getMotionCapabilities` 检查双向 RPC 链路，单次 RPC
 最长等待 500 ms，失败后间隔 200 ms 重试。首次收到成功响应后，才启用运动观测和状态查询，
-并在 `/motion/status` 中报告 `CONNECTED`。如果本次就绪检查超时，bridge 不主动断开 SDK
-连接；后续 service 请求会重新执行一轮有限时的就绪检查。
+并在 `/motion/status` 中报告 `CONNECTED`。当前实现会在开启 RPC 完成后才创建原始观测订阅，
+因此首批观测帧可能丢失；这是当前实现细节，DDS 协议直连仍应使用先订阅再开推送的顺序。
+如果本次就绪检查超时，bridge 不主动断开 SDK 连接；后续 service 请求会重新执行一轮有限时的就绪检查。
 
 如果设备有多个网卡，还必须设置 `CYCLONEDDS_URI`，明确选择机器人所在网卡。
 
@@ -100,7 +101,8 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 ```
 
 bridge 不为 standing、laying、walking 等动作分别创建 service。动作名和参数范围由服务端能力
-列表决定并由服务端校验。
+列表决定并由服务端校验。取控后 bridge 会直接转发请求动作，不会代替调用方插入推荐的全零
+`walking` 前置切换，也不会为调用方轮询 `current_action`。
 
 首次 High-level 实机动作验证建议使用上面的全零 `walking` 请求，再通过
 `/motion/status` 确认 `current_action` 和三个速度字段。不要用空 JSON 隐式依赖默认零值。

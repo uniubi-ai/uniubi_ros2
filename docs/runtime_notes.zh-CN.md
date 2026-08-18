@@ -20,8 +20,9 @@ Direct DDS 和 Direct RPC 是两种平级接入方式。
 订阅这些观测 topic 不要求持有 High Level 控制权。`/motion/observed` 和
 `/sensor/observed` 默认关闭，协议直连使用者必须先建立 reader，
 再通过无需运动控制权的 RPC 调用 `setMotionObservedEnable()` 开启。Motion bridge 会自动管理
-原始观测流，其业务节点只需订阅 bridge 发布的标准 ROS 2 topic。原始 topic 测试通过只说明消息类型、
-DDS 发现和 QoS 链路可用。
+原始观测流，其业务节点只需订阅 bridge 发布的标准 ROS 2 topic。当前 bridge 实现会在开启 RPC
+完成后才创建原始订阅，因此首批观测帧可能丢失；协议直连仍应遵守先建立 reader 的顺序。原始 topic
+测试通过只说明消息类型、DDS 发现和 QoS 链路可用。
 
 `/sensor/observed` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，由
 `setMotionObservedEnable(..., sensor_enable=true)` 开启。里程计从 `SensorObserved.odom`
@@ -41,7 +42,8 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 
 ## Motion bridge 速度安全边界
 
-- `start_action` 在需要时自动申请 SDK 高级运控控制权；不对外提供独立 `take_control` 服务。
+- `start_action` 在需要时自动申请 SDK 高级运控控制权；不对外提供独立 `take_control` 服务。bridge
+  取控后会直接转发请求动作，不会代替调用方插入全零 `walking` 或轮询 `current_action`。
 - `/cmd_vel` 不申请控制权、不查询、启动或切换动作，只把三个速度字段直接交给 `setActionParams`。
 - `linear.y` 和 UniUbi `lineVelocityY` 都使用“正左负右”定义，bridge 不做符号转换；
   `/motion/status.line_velocity_y` 也使用相同方向定义。
@@ -51,8 +53,9 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 - 成功的 `startAction`、`setActionParams`、`stopAction` 和 `emergencyStop` 会刷新服务端控制租约；
   client 仅在这些控制 RPC 空闲达到续约周期后发送 `renewMotionControl`。失败或超时的 RPC 不计为续约。
 - `stop_action` 会停止当前动作，将实际动作切回 `walking` 并把 walking 三轴速度清零，同时继续持权续约。
-  显式启动全零参数的 `walking` 也可以完成同样的动作切换；两者都是异步操作。`release_control`
-  与进程退出会先停止动作再释放控制会话。
+  显式启动全零参数的 `walking` 也可以完成同样的动作切换；两者都是异步操作。bridge 的
+  `release_control` service 和正常 bridge 退出会尽力先停止动作再释放控制会话；底层
+  `MotionHighLevelClient::releaseControl()` / `disconnect()` 路径不会隐式调用 `stopAction()`。
 
 `/odom` 仅转发 `valid=true` 的设备累计里程计，不再次积分，也暂不发布 TF。
 `position.y` 和 `twist.linear.y` 均为正左负右，bridge 不做符号转换。原始生命周期字段仍以

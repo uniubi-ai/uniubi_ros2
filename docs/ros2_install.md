@@ -74,3 +74,7 @@ See the repository [README](../README.md#prerequisites) for an example.
 
 ```bash
 source /opt/ros/humble/setup.bash
+cd ~/ros2_ws
+colcon build
+source install/setup.bash
+```

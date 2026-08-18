@@ -16,7 +16,7 @@ Continuous raw data is available through DDS/ROS 2 topics:
 - Sensor observation: `/sensor/observed` (GPS, UWB, and Walk odometry)
 - Raw control: `/motion/trc` (not an ordinary read-only stream)
 
-Subscribing to observation topics does not require High Level control ownership. `/motion/observed` and `/sensor/observed` are disabled by default. Direct-protocol clients must create the reader first and then call the control-free `setMotionObservedEnable()` RPC. The Motion bridge manages raw observation streams automatically; its application nodes only subscribe to the standard ROS 2 topics published by the bridge. A successful raw-topic test proves only that the message type, DDS discovery, and QoS path work.
+Subscribing to observation topics does not require High Level control ownership. `/motion/observed` and `/sensor/observed` are disabled by default. Direct-protocol clients must create the reader first and then call the control-free `setMotionObservedEnable()` RPC. The Motion bridge manages raw observation streams automatically; its application nodes only subscribe to the standard ROS 2 topics published by the bridge. In the current bridge implementation, the enable RPC completes before the raw subscriptions are created, so the first observation frames may be lost; direct-protocol clients should continue to follow the reader-first protocol order. A successful raw-topic test proves only that the message type, DDS discovery, and QoS path work.
 
 `/sensor/observed` uses `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE` and is enabled with `setMotionObservedEnable(..., sensor_enable=true)`. Odometry comes from `SensorObserved.odom` and is valid only in Walk mode. When Walk ends, the final value for that interval is retained and `valid=false`. Entering Walk again establishes a new origin and increments `epoch`.
 
@@ -33,14 +33,14 @@ Read-only queries do not require control ownership. For control RPCs, the caller
 
 ## Motion bridge velocity safety boundary
 
-- `start_action` acquires SDK High Level motion control when needed; no independent public `take_control` service exists.
+- `start_action` acquires SDK High Level motion control when needed; no independent public `take_control` service exists. The bridge forwards the requested action directly after acquisition; it does not insert the recommended zero-velocity `walking` transition or poll `current_action` for the caller.
 - `/cmd_vel` does not acquire control, query, start, or switch actions. It passes three velocity fields directly to `setActionParams`.
 - `linear.y` and Uniubi `lineVelocityY` both use positive-left/negative-right. The bridge does not invert the sign, and `/motion/status.line_velocity_y` uses the same convention.
 - The bridge reads only `linear.x`, `linear.y`, and `angular.z`; it does not infer actions or clamp values by action. The SDK and server validate parameters and enforce safety limits.
 - An input timeout sends one set of zero values for all three velocity fields. It does not stop the action or release control.
 - High-rate input is coalesced to the latest value and limited by `cmd_vel_rate_hz` (30 Hz by default).
 - Successful `startAction`, `setActionParams`, `stopAction`, and `emergencyStop` calls refresh the server-side control lease. The client sends `renewMotionControl` only when control RPCs have been idle for a renewal interval. Failed or timed-out RPCs do not count as renewal.
-- `stop_action` stops every current action, returns the effective action to `walking`, and zeros all three walking velocities while retaining and renewing control. Starting `walking` with full zero parameters provides the equivalent explicit action transition. Both are asynchronous; `release_control` and process shutdown stop the action before releasing the control session.
+- `stop_action` stops every current action, returns the effective action to `walking`, and zeros all three walking velocities while retaining and renewing control. Starting `walking` with full zero parameters provides the equivalent explicit action transition. Both are asynchronous. The bridge's `release_control` service and normal bridge shutdown make a best-effort stop before releasing; the underlying `MotionHighLevelClient::releaseControl()` / `disconnect()` path does not implicitly call `stopAction()`.
 
 `/odom` forwards only device-accumulated odometry with `valid=true`. It does not integrate again and currently publishes no TF. `position.y` and `twist.linear.y` remain positive-left/negative-right without bridge conversion. The raw lifecycle fields remain available in `/sensor/observed.odom`.
 
