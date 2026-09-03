@@ -144,10 +144,6 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
   -p device_id:="$ROBOT_DEVICE_ID"
 ```
 
-大脑 Domain 的 `/robotCereServer/Event` 与远程 Host 的 `/robotServer/Event` 不是同一事件封装；
-同步 RPC、控制权和动作可使用该模式，但控制权抢占等异步事件仍应结合租约失败和
-`/motion/status` 判断。
-
 ### 在远程 PC/开发主机上运行
 
 ```bash

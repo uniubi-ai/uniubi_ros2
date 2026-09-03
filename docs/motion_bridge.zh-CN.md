@@ -34,9 +34,6 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
   -p device_id:="$ROBOT_DEVICE_ID"
 ```
 
-大脑侧 Event 封装与远程 Host Event 不同，当前应同时用续约结果和 `/motion/status` 判断控制权
-状态。
-
 ### 远程 PC/开发主机
 
 ```bash
@@ -178,7 +175,7 @@ last_error_message
 状态有两个更新来源：
 
 - bridge 以 `motion_status_rate_hz`（默认 10 Hz）调用只读 `queryMotionState`，更新实际动作和速度。
-- 远程 Host 模式下，内部 `/robotServer/Event` 在控制权被抢占等事件发生时立即更新控制状态和错误；大脑模式使用前述 Event/租约边界。
+- 内部 Event 在控制权被抢占等事件发生时立即更新控制状态和错误。
 
 原始 Event JSON 不对外发布；未知事件只写 DEBUG 日志。10 Hz 是状态快照，最多存在一个查询
 周期的显示延迟，不保证记录持续时间短于 100 ms 的每个中间动作。

@@ -30,8 +30,6 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
   -p device_id:="$ROBOT_DEVICE_ID"
 ```
 
-The brain-side Event envelope differs from the remote Host Event; use lease results and `/motion/status` together to determine control state.
-
 ### On a remote PC/development host
 
 ```bash
@@ -156,7 +154,7 @@ last_error_message
 State has two update sources:
 
 - The bridge calls the read-only `queryMotionState` at `motion_status_rate_hz` (10 Hz by default) to update actual action and velocity.
-- In remote Host mode, internal `/robotServer/Event` handling updates control state and errors immediately for events such as control preemption; brain mode uses the Event/lease boundary described above.
+- Internal Event handling updates control state and errors immediately for events such as control preemption.
 
 Raw Event JSON is not published; unknown events are written to DEBUG logs only. The 10 Hz state is a snapshot that can lag by one query period and does not guarantee that every intermediate action shorter than 100 ms is recorded.
 

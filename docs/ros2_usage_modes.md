@@ -166,7 +166,7 @@ Read-only RPCs require no control ownership. For control RPCs, the caller must i
 takeMotionControl
 → retain controller/lease/rawActionId
 → renewMotionControl
-→ parse the Event topic and outer envelope for the runtime location
+→ parse control-status events
 → make control calls
 → stopMotionAction
 → releaseMotionControl

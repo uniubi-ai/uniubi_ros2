@@ -27,7 +27,7 @@ The direct-protocol and motion packages in this repository do not link
 `robotServer`, depending on runtime location, through `uniubi/srv/System`:
 
 - RPC service: `uniubi/srv/System`
-- Asynchronous control events: remote Host uses `/robotServer/Event`; see DDS and device matching for brain mode
+- Asynchronous control events: provided by the Event topic for the selected runtime environment
 
 Read-only queries do not require control ownership. For control RPCs, the caller must manage acquisition, renewal, Event handling, and release. A successful RPC test proves only the request/response contract and routing; it does not validate the C++ or Python SDK runtime path.
 
@@ -48,7 +48,7 @@ Read-only queries do not require control ownership. For control RPCs, the caller
 
 - `/motion/status` publishes actual action, velocity, control state, and the latest error through a 10 Hz `queryMotionState` RPC. It is not involved in `/cmd_vel` delivery.
 - `/motion/status` can lag by up to one query period and is not per-control-frame feedback.
-- In remote Host mode, internal `/robotServer/Event` processing immediately detects control preemption. Brain mode uses a different Event envelope, as described below.
+- Internal Event processing immediately detects control preemption.
 - `/joint_states`, `/imu/data`, and `/battery_state` are converted from `/motion/observed` and do not require High Level control ownership.
 - The bridge obtains joint names and `(limbNo, jointNo)` through the read-only `getMotorLayout` RPC instead of relying on a fixed motor array order.
 - `/joint_states` position/velocity/effort come from motor position/velocity/torque. Fault codes, online state, and temperature remain available only in raw `/motion/observed`.
@@ -59,17 +59,15 @@ Read-only queries do not require control ownership. For control RPCs, the caller
 
 Cyclone DDS is recommended. Select the Domain and RPC service together based on the runtime location:
 
-| Runtime location | Domain | RPC service | Event topic |
-|---|---:|---|---|
-| Robot brain (Orin) | `1` | `cerebellumServer` | `/robotCereServer/Event` |
-| Remote PC/development host | `42` | `robotServer` | `/robotServer/Event` |
+| Runtime location | Domain | RPC service |
+|---|---:|---|
+| Robot brain (Orin) | `1` | `cerebellumServer` |
+| Remote PC/development host | `42` | `robotServer` |
 
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_LOCALHOST_ONLY=0
 ```
-
-The brain-side Event uses a different outer envelope. `MotionHighLevelClient` does not currently treat it as fully equivalent to `/robotServer/Event` control-status events, so brain mode must also use lease RPC results and `/motion/status` to determine control ownership. Remote Host mode retains the existing Host Event parsing.
 
 `MotionHighLevelClient` and `SystemRpcClientBase` write the target `device_id` into every `System.srv` request. robotServer filters RPC requests by target device SN, so only the matching device responds. This applies only to RPC and cannot isolate raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event`, because those messages currently contain no `device_id` that the bridge can filter.
 

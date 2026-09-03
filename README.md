@@ -125,8 +125,6 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
   -p device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`/robotCereServer/Event` in the brain Domain is not the same envelope as the remote Host `/robotServer/Event`. Synchronous RPC, control ownership, and actions can use this mode, but control preemption and other asynchronous events must also be inferred from lease failures and `/motion/status`.
-
 ### Run on a remote PC/development host
 
 ```bash

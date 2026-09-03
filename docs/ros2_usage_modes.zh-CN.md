@@ -179,7 +179,7 @@ TRC 控制 topic       高频实时控制帧
 takeMotionControl
 → 保存 controller/lease/rawActionId
 → renewMotionControl
-→ 按运行位置解析对应 Event topic 和外层封装
+→ 解析控制状态 Event
 → 控制调用
 → stopMotionAction
 → releaseMotionControl
