@@ -96,6 +96,8 @@ Trade-offs:
 
 Example:
 
+Use the Host Domain from a remote PC/development host:
+
 ```bash
 UNIUBI_TEST_ROS_DOMAIN_ID=42 \
 UNIUBI_TEST_SERVICE_NAME=robotServer \
@@ -104,11 +106,21 @@ UNIUBI_TEST_DEVICE_ID=<device-id> \
 ros2 run uniubi_motion_client motion_high_level_client_example
 ```
 
+When running on the robot brain (Orin), use:
+
+```bash
+UNIUBI_TEST_ROS_DOMAIN_ID=1 \
+UNIUBI_TEST_SERVICE_NAME=cerebellumServer \
+UNIUBI_TEST_EVENT_TOPIC=/robotCereServer/Event \
+UNIUBI_TEST_DEVICE_ID="$(python3 -c 'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')" \
+ros2 run uniubi_motion_client motion_high_level_client_example
+```
+
 Real movement is disabled by default in the example. A successful build or launch does not mean that hardware motion has been validated.
 
 ## Option 3: Direct DDS / ROS 2 protocol
 
-This mode bypasses the application wrappers in the bridge and `uniubi_motion_client` and uses the complete robotServer communication protocol directly:
+This mode bypasses the application wrappers in the bridge and `uniubi_motion_client` and directly uses the `cerebellumServer` or `robotServer` protocol selected for the runtime location:
 
 ```text
 RPC requests/responses   queries, configuration, control ownership, and action control
@@ -146,7 +158,7 @@ Trade-offs:
 
 ### RPC, Event, and control
 
-Applications call robotServer directly through `uniubi/srv/System`. This is suitable for querying capabilities or state, validating a new RPC, and determining whether a problem is in the application wrapper, client, or robotServer.
+Applications call the selected RPC service directly through `uniubi/srv/System`. This is suitable for querying capabilities or state, validating a new RPC, and determining whether a problem is in the application wrapper, client, or server.
 
 Read-only RPCs require no control ownership. For control RPCs, the caller must implement:
 
@@ -154,7 +166,7 @@ Read-only RPCs require no control ownership. For control RPCs, the caller must i
 takeMotionControl
 → retain controller/lease/rawActionId
 → renewMotionControl
-→ parse /robotServer/Event
+→ parse the Event topic and outer envelope for the runtime location
 → make control calls
 → stopMotionAction
 → releaseMotionControl

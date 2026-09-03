@@ -32,10 +32,10 @@ Direct DDS 和 Direct RPC 是两种平级接入方式。
 ### RPC、Event 和控制
 
 本仓的协议直连和运动相关 package 不链接 `librobotMotionSdk.so`，通过
-`uniubi/srv/System` 对接 robotServer：
+`uniubi/srv/System` 按运行位置对接 `cerebellumServer` 或 `robotServer`：
 
 - RPC service：`uniubi/srv/System`
-- 异步控制事件：`/robotServer/Event`
+- 异步控制事件：远程 Host 使用 `/robotServer/Event`；大脑模式见“DDS 与设备匹配”
 
 只读查询不需要控制权。直接执行控制 RPC 时，调用方必须自行处理取权、续约、Event 和释放。
 RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ 或 Python SDK runtime 链路可用。
@@ -65,7 +65,7 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 
 - `/motion/status` 通过 10 Hz `queryMotionState` RPC 发布实际动作、速度、控制状态和最近错误；它不参与 `/cmd_vel` 下发。
 - `/motion/status` 最多有一个查询周期的显示延迟，不能当作逐控制帧反馈。
-- 内部 `/robotServer/Event` 仍用于立即发现控制权抢占；bridge 将已知事件转换成结构化状态，未知原始 JSON 只写 DEBUG 日志，不再公开 `~/events`。
+- 远程 Host 模式下，内部 `/robotServer/Event` 用于立即发现控制权抢占；bridge 将已知事件转换成结构化状态。大脑模式使用不同 Event 外层封装，边界见下文。
 - `/joint_states`、`/imu/data` 和 `/battery_state` 都由 `/motion/observed` 转换，不需要 High Level 控制权。
 - bridge 通过只读 `getMotorLayout` RPC 获取关节名称和 `(limbNo, jointNo)`，不依赖固定电机数组顺序。
 - `/joint_states` 的 position/velocity/effort 分别来自电机 position/velocity/torque；故障码、在线状态和温度仍以原始 `/motion/observed` 为准。
@@ -74,12 +74,21 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 
 ## DDS 与设备匹配
 
-该集成路径建议使用 Cyclone DDS：
+该集成路径建议使用 Cyclone DDS，并根据运行位置同时选择 Domain 和 RPC service：
+
+| 运行位置 | Domain | RPC service | Event topic |
+|---|---:|---|---|
+| 机器人“大脑”Orin | `1` | `cerebellumServer` | `/robotCereServer/Event` |
+| 远程 PC/开发主机 | `42` | `robotServer` | `/robotServer/Event` |
 
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
 ```
+
+大脑侧 Event 使用不同的外层封装，当前 `MotionHighLevelClient` 不能把它视为与
+`/robotServer/Event` 完全等价的控制状态事件；大脑模式需要同时依靠租约 RPC 结果和
+`/motion/status` 判断控制权。远程 Host 模式支持既有的 Host Event 解析。
 
 `MotionHighLevelClient` 和 `SystemRpcClientBase` 会将目标 `device_id` 写入每个 `System.srv`
 请求；robotServer 按目标设备 SN 过滤 RPC 请求，只有匹配设备响应。但该机制只覆盖 RPC，不能

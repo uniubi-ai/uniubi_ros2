@@ -4,7 +4,7 @@
 
 ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and an on-board MediaBus camera driver.
 
-The original robotServer `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with robotServer through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK locally on the aarch64 board because MediaBus is a shared-memory interface rather than a remote robotServer topic.
+The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK locally on the aarch64 board because MediaBus is a shared-memory interface rather than a remote RPC topic.
 
 ## Start here
 
@@ -50,26 +50,33 @@ uniubi_motion_client
             ↓
 uniubi/srv/System + DDS topics
             ↓
-robotServer / MotionServer
+cerebellumServer or robotServer / MotionServer
 ```
 
 ## Prerequisites
 
 - ROS 2 Humble is installed and sourced.
-- The development machine or Orin is on the same discoverable network and DDS Domain as the robot.
-- You know the target robot's `device_id`. It is the `deviceNo` in device information (the robot SN). This field routes RPC calls but cannot isolate raw DDS topics.
+- First determine whether the ROS 2 process runs on the robot's brain (Orin) or on a remote host. These locations use different DDS Domains and RPC endpoints and must not be mixed.
+- You know the target robot's `device_id`. It is the `deviceNo` in device information (the robot SN). Orin can read it from `/tmp/deviceInfo`; a remote host must configure the target SN explicitly. This field routes RPC calls but cannot isolate raw DDS topics.
 - Use a separate `ROS_DOMAIN_ID` for each robot. Do not place multiple robots and their bridges in the same Domain.
 - Cyclone DDS is recommended.
+
+| Runtime location | `ROS_DOMAIN_ID` | RPC service | Network interface |
+|---|---:|---|---|
+| Robot brain (on-board Orin) | `1` | `cerebellumServer` | Robot VLAN, normally `eth0.100` |
+| Remote PC/development host | `42` | `robotServer` | Host interface connected to the robot network |
+
+These values describe the current robot runtime contract. If a product configuration changes the Domain or service name, use the target device's actual DDS configuration. DDS discovery alone does not replace a read-only RPC check.
 
 For a board and development-machine package list, environment setup, and
 verification commands, see [Install ROS 2 Humble](docs/ros2_install.md).
 
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
 ```
 
-If the machine has multiple network interfaces, use `CYCLONEDDS_URI` to select the interface connected to the robot. On Orin, the robot VLAN interface is `eth0.100`:
+Use `CYCLONEDDS_URI` to select the interface connected to the robot. On Orin, the robot VLAN interface is `eth0.100`:
 
 ```bash
 export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
@@ -99,7 +106,28 @@ colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 
 ## Recommended: Motion bridge
 
-Start the bridge:
+### Run on the robot brain (Orin)
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=1
+export ROS_LOCALHOST_ONLY=0
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID="$(python3 -c \
+  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+
+ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p robot_service_name:=cerebellumServer \
+  -p event_topic:=/robotCereServer/Event \
+  -p device_id:="$ROBOT_DEVICE_ID"
+```
+
+`/robotCereServer/Event` in the brain Domain is not the same envelope as the remote Host `/robotServer/Event`. Synchronous RPC, control ownership, and actions can use this mode, but control preemption and other asynchronous events must also be inferred from lease failures and `/motion/status`.
+
+### Run on a remote PC/development host
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -108,18 +136,15 @@ source ~/ros2_ws/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
-# Use eth0.100 on Orin; replace it with the actual robot-network interface elsewhere
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
-export ROBOT_DEVICE_ID="$(python3 -c \
-  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+# Replace the placeholder with the host interface connected to the robot network.
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-The robot runtime provides `/tmp/deviceInfo`; its `deviceNo` is the target robot SN required by the bridge. On machines with multiple interfaces, also set `CYCLONEDDS_URI` as described under Prerequisites.
-
-Starting the bridge only connects to robotServer. It does not acquire motion control immediately. The first `/motion/start_action` call acquires control and starts lease maintenance. Successful control RPCs refresh the lease directly; an extra renewal RPC is sent only while control calls are idle.
+Starting the bridge only connects to the selected RPC service. It does not acquire motion control immediately. The first `/motion/start_action` call acquires control and starts lease maintenance. Successful control RPCs refresh the lease directly; an extra renewal RPC is sent only while control calls are idle.
 
 A minimal control sequence:
 
@@ -168,7 +193,7 @@ See the [Motion bridge guide](docs/motion_bridge.md) for fields, ownership lifec
 
 - To call high-level motion methods directly from your own C++ node, use [`uniubi_motion_client`](docs/ros2_usage_modes.md#option-2-uniubi_motion_client-c-client).
 - To subscribe to raw messages, debug QoS/type mappings, or add protocol interfaces, use the [direct DDS / ROS 2 protocol](docs/ros2_usage_modes.md#option-3-direct-dds--ros-2-protocol).
-- To subscribe to complete read-only sensor observations (GPS, UWB, and Walk odometry):
+- To subscribe to complete read-only sensor observations (GPS, UWB, and Walk odometry; remote Host example):
 
 ```bash
 ROS_DOMAIN_ID=42 \

@@ -54,12 +54,19 @@ echo 'source /opt/ros/humble/setup.bash' >> ~/.bashrc
 
 ## 4. 选择 DDS 配置
 
+Domain 必须与程序运行位置匹配：
+
+| 运行位置 | `ROS_DOMAIN_ID` | RPC service |
+|---|---:|---|
+| 机器人“大脑”Orin | `1` | `cerebellumServer` |
+| 远程 PC/开发主机 | `42` | `robotServer` |
+
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 ```
 
+再按上表设置 `ROS_DOMAIN_ID`。只改变 Domain 而不改变 RPC service 会连接到错误入口。
 设备存在多个网卡时，先用 `ip -br addr` 确认连接机器人网络的网卡，再设置
 `CYCLONEDDS_URI`。示例见仓库 [README](../README.zh-CN.md#前置条件)。
 

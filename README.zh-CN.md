@@ -9,7 +9,8 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs/blob/main/README.zh-CN.md)，其 ROS 2 package 名和
 接口类型前缀是 `uniubi`。bridge 专用的 `MotionStatus.msg` 和
 `StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。三种运动接入方式均不链接
-`librobotMotionSdk.so`，而是通过 ROS 2 service 和 DDS topic 对接 robotServer。独立的
+`librobotMotionSdk.so`，而是通过 ROS 2 service 和 DDS topic 按运行位置对接
+`cerebellumServer` 或 `robotServer`。独立的
 `uniubi_media_driver` 需要在 aarch64 板端链接 SDK，因为 MediaBus 是本地共享内存接口，
 不是远程 robotServer topic。
 
@@ -62,28 +63,38 @@ uniubi_motion_client
             ↓
 uniubi/srv/System + DDS topics
             ↓
-robotServer / MotionServer
+cerebellumServer 或 robotServer / MotionServer
 ```
 
 ## 前置条件
 
 - ROS 2 Humble 环境已经安装并完成 `source`。
-- 开发机或 Orin 与机器人位于同一可发现网络和 DDS Domain。
-- 已确认目标机器人的 `device_id`，其值为设备信息中的 `deviceNo`（机器人 SN）。
+- 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
+  DDS Domain 和 RPC 入口，不能混用。
+- 已确认目标机器人的 `device_id`，其值为设备信息中的 `deviceNo`（机器人 SN）。Orin 可从
+  `/tmp/deviceInfo` 读取；远程主机必须显式配置目标 SN。
   该字段用于 RPC 路由，不能隔离原始 DDS topic。
 - 当前建议每条机器人使用独立的 `ROS_DOMAIN_ID`；不要让多条机器人及其 bridge 共享同一 Domain。
 - 推荐使用 Cyclone DDS。
+
+| 运行位置 | `ROS_DOMAIN_ID` | RPC service | 网络接口 |
+|---|---:|---|---|
+| 机器人“大脑”Orin 本机 | `1` | `cerebellumServer` | 机器人 VLAN，通常为 `eth0.100` |
+| 远程 PC/开发主机 | `42` | `robotServer` | 实际连接机器人网络的网卡 |
+
+以上是当前机器人运行时的接入约定；如果产品配置修改了 Domain 或 service 名称，应以目标设备的
+实际 DDS 配置为准。Domain 可发现只证明 DDS 图可见，不能替代一次只读 RPC 验证。
 
 板端和开发机的软件包清单、环境加载与验证命令见
 [安装 ROS 2 Humble](docs/ros2_install.zh-CN.md)。
 
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
 ```
 
-如机器上有多个网卡，还需要通过 `CYCLONEDDS_URI` 明确指定机器人所在网卡。Orin
-平台使用连接机器人网络的 VLAN 网卡 `eth0.100`：
+还需要通过 `CYCLONEDDS_URI` 明确指定机器人所在网卡。Orin 平台使用连接机器人网络的
+VLAN 网卡 `eth0.100`：
 
 ```bash
 export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
@@ -114,7 +125,30 @@ colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 
 ## 推荐方式：Motion bridge
 
-启动 bridge：
+### 在机器人“大脑”Orin 上运行
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=1
+export ROS_LOCALHOST_ONLY=0
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID="$(python3 -c \
+  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+
+ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p robot_service_name:=cerebellumServer \
+  -p event_topic:=/robotCereServer/Event \
+  -p device_id:="$ROBOT_DEVICE_ID"
+```
+
+大脑 Domain 的 `/robotCereServer/Event` 与远程 Host 的 `/robotServer/Event` 不是同一事件封装；
+同步 RPC、控制权和动作可使用该模式，但控制权抢占等异步事件仍应结合租约失败和
+`/motion/status` 判断。
+
+### 在远程 PC/开发主机上运行
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -123,20 +157,15 @@ source ~/ros2_ws/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
-# Orin 使用 eth0.100；其他平台请替换为实际连接机器人网络的网卡名
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
-export ROBOT_DEVICE_ID="$(python3 -c \
-  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+# 将接口名替换为远程主机上实际连接机器人网络的网卡
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`/tmp/deviceInfo` 由机器人运行环境提供，`deviceNo` 就是 bridge 所需的目标机器人 SN。
-如果设备有多个网卡，还必须按“前置条件”中的说明设置 `CYCLONEDDS_URI`，明确选择机器人
-所在网卡。
-
-bridge 启动后只连接 robotServer，不会立即申请运动控制权。第一次调用
+bridge 启动后只连接所选 RPC service，不会立即申请运动控制权。第一次调用
 `/motion/start_action` 时才自动取权并启动租约维护。成功的动作控制 RPC 会直接刷新租约，
 只有控制调用空闲时才额外发送续约 RPC。
 
@@ -192,7 +221,7 @@ Topics：
   [`uniubi_motion_client`](docs/ros2_usage_modes.zh-CN.md#方式二uniubi_motion_client-c-客户端)。
 - 需要订阅原始消息、调试 QoS/类型映射或新增协议接口：使用
   [DDS / ROS 2 协议直连](docs/ros2_usage_modes.zh-CN.md#方式三dds--ros-2-协议直连)。
-- 只读订阅完整传感器观测（GPS、UWB、Walk 里程计）：
+- 只读订阅完整传感器观测（GPS、UWB、Walk 里程计；以下为远程 Host 示例）：
 
 ```bash
 ROS_DOMAIN_ID=42 \

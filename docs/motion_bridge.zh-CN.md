@@ -12,6 +12,33 @@
 
 ## 启动
 
+先根据运行位置选择一组配置，不要只修改 Domain 而继续使用另一侧的 RPC service。
+
+### 机器人“大脑”Orin 本机
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=1
+export ROS_LOCALHOST_ONLY=0
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
+
+export ROBOT_DEVICE_ID="$(python3 -c \
+  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+
+ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p robot_service_name:=cerebellumServer \
+  -p event_topic:=/robotCereServer/Event \
+  -p device_id:="$ROBOT_DEVICE_ID"
+```
+
+大脑侧 Event 封装与远程 Host Event 不同，当前应同时用续约结果和 `/motion/status` 判断控制权
+状态。
+
+### 远程 PC/开发主机
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
@@ -19,15 +46,14 @@ source ~/ros2_ws/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
-
-export ROBOT_DEVICE_ID="$(python3 -c \
-  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`device_id` 必须填写，其值是 `/tmp/deviceInfo` 中的 `deviceNo`（机器人 SN），但它只用于
+`device_id` 在两种模式下都必须填写，其值是目标机器人的 `deviceNo`（机器人 SN），但它只用于
 RPC 路由。`/motion/observed`、`/sensor/observed` 和
 `/robotServer/Event` 等原始 topic 当前没有可供 bridge 过滤的设备身份；多条机器人共享同一
 DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条机器人使用独立的
@@ -152,7 +178,7 @@ last_error_message
 状态有两个更新来源：
 
 - bridge 以 `motion_status_rate_hz`（默认 10 Hz）调用只读 `queryMotionState`，更新实际动作和速度。
-- 内部 `/robotServer/Event` 在控制权被抢占等事件发生时立即更新控制状态和错误。
+- 远程 Host 模式下，内部 `/robotServer/Event` 在控制权被抢占等事件发生时立即更新控制状态和错误；大脑模式使用前述 Event/租约边界。
 
 原始 Event JSON 不对外发布；未知事件只写 DEBUG 日志。10 Hz 是状态快照，最多存在一个查询
 周期的显示延迟，不保证记录持续时间短于 100 ms 的每个中间动作。
@@ -186,7 +212,6 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 
 `/joint_states`、`/imu/data` 和 `/battery_state` 来自原始 `/motion/observed`，不要求运动控制权。
 
-- `/joint_states` 优先使用服务端电机布局；当前固件不支持布局 RPC 时可通过配置提供机型 fallback。
 - `JointState.effort` 使用设备电机 torque。
 - IMU 加速度或角速度无效时不发布；四元数无效时将 `orientation_covariance[0]` 设为 `-1`。
 - `BatteryState.percentage` 把设备 0-100 电量换算为 ROS 2 的 0-1。
@@ -202,7 +227,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 |---|---|---|
 | `device_id` | 空 | 目标机器人 `deviceNo` / SN；必须填写 |
 | `lease_ms` | `60000` | 申请控制权时请求的租约 |
-| `auto_connect` | `true` | 启动后是否自动连接 robotServer |
+| `auto_connect` | `true` | 启动后是否自动连接所配置的 RPC service |
 | `cmd_vel_timeout_ms` | `500` | ROS 2 速度输入超时 |
 | `cmd_vel_rate_hz` | `30.0` | 最大参数 RPC 下发频率；上游可更高频发布，bridge 仅转发最新值 |
 | `motion_status_rate_hz` | `10.0` | 实际动作状态查询频率 |

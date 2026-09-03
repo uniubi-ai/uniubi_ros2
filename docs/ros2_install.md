@@ -60,12 +60,19 @@ source `/opt/ros/humble/setup.bash` explicitly there.
 
 ## 4. Select DDS settings
 
+The Domain must match where the process runs:
+
+| Runtime location | `ROS_DOMAIN_ID` | RPC service |
+|---|---:|---|
+| Robot brain (Orin) | `1` | `cerebellumServer` |
+| Remote PC/development host | `42` | `robotServer` |
+
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 ```
 
+Set `ROS_DOMAIN_ID` from the table. Changing the Domain without changing the RPC service selects the wrong endpoint.
 When the machine has multiple network interfaces, inspect them with
 `ip -br addr` and set `CYCLONEDDS_URI` to the interface connected to the robot.
 See the repository [README](../README.md#prerequisites) for an example.

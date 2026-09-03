@@ -8,6 +8,32 @@
 
 ## Launch
 
+Choose one setup based on where the process runs. Do not change only the Domain while keeping the other side's RPC service.
+
+### On the robot brain (Orin)
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=1
+export ROS_LOCALHOST_ONLY=0
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0.100"/></Interfaces></General></Domain></CycloneDDS>'
+
+export ROBOT_DEVICE_ID="$(python3 -c \
+  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+
+ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p robot_service_name:=cerebellumServer \
+  -p event_topic:=/robotCereServer/Event \
+  -p device_id:="$ROBOT_DEVICE_ID"
+```
+
+The brain-side Event envelope differs from the remote Host Event; use lease results and `/motion/status` together to determine control state.
+
+### On a remote PC/development host
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
@@ -15,15 +41,14 @@ source ~/ros2_ws/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
-
-export ROBOT_DEVICE_ID="$(python3 -c \
-  'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`device_id` is required and must be the `deviceNo` (robot SN) from `/tmp/deviceInfo`, but it is used only for RPC routing. Raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event` currently contain no device identity that the bridge can filter. If multiple robots share one DDS Domain, observations or events from another robot may be mixed in. Assign a separate `ROS_DOMAIN_ID` to each robot. On startup, the bridge establishes a connection only and does not immediately acquire High Level motion control.
+`device_id` is required in both modes and must be the target robot's `deviceNo` (robot SN), but it is used only for RPC routing. Raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event` currently contain no device identity that the bridge can filter. If multiple robots share one DDS Domain, observations or events from another robot may be mixed in. Assign a separate `ROS_DOMAIN_ID` to each robot. On startup, the bridge establishes a connection only and does not immediately acquire High Level motion control.
 
 Discovering the DDS service is not treated as connection readiness. After SDK `connect()` succeeds, the bridge checks the bidirectional RPC path with the read-only, side-effect-free `getMotionCapabilities` call for up to five seconds. Each RPC waits at most 500 ms, with 200 ms between retries. Only after the first successful response does it enable motion observations and state queries and report `CONNECTED` on `/motion/status`. In the current implementation, the enable RPC completes before the raw observation subscriptions are created, so the first observation frames may be lost. This is a known implementation detail; direct DDS clients should still use the protocol's reader-first order. If the readiness check times out, the bridge does not actively disconnect the SDK; a later service request runs another bounded readiness check.
 
@@ -131,7 +156,7 @@ last_error_message
 State has two update sources:
 
 - The bridge calls the read-only `queryMotionState` at `motion_status_rate_hz` (10 Hz by default) to update actual action and velocity.
-- Internal `/robotServer/Event` handling updates control state and errors immediately for events such as control preemption.
+- In remote Host mode, internal `/robotServer/Event` handling updates control state and errors immediately for events such as control preemption; brain mode uses the Event/lease boundary described above.
 
 Raw Event JSON is not published; unknown events are written to DEBUG logs only. The 10 Hz state is a snapshot that can lag by one query period and does not guarantee that every intermediate action shorter than 100 ms is recorded.
 
@@ -163,7 +188,6 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 
 `/joint_states`, `/imu/data`, and `/battery_state` come from raw `/motion/observed` and do not require motion control ownership.
 
-- `/joint_states` prefers the server motor layout. If the current firmware lacks the layout RPC, a robot-model fallback can be configured.
 - `JointState.effort` uses device motor torque.
 - `/imu/data` is not published when acceleration or angular velocity is invalid. If the quaternion is invalid, `orientation_covariance[0]` is set to `-1`.
 - `BatteryState.percentage` converts the device's 0–100 charge value to the ROS 2 range 0–1.
@@ -177,7 +201,7 @@ Use raw `/motion/observed` for complete fault codes, online state, and temperatu
 |---|---|---|
 | `device_id` | empty | Target robot `deviceNo` / SN; required |
 | `lease_ms` | `60000` | Requested lease when acquiring control |
-| `auto_connect` | `true` | Whether to connect to robotServer automatically at startup |
+| `auto_connect` | `true` | Whether to connect to the configured RPC service automatically at startup |
 | `cmd_vel_timeout_ms` | `500` | ROS 2 velocity-input timeout |
 | `cmd_vel_rate_hz` | `30.0` | Maximum parameter-RPC rate; upstream publishers may run faster, but only the latest value is forwarded |
 | `motion_status_rate_hz` | `10.0` | Actual motion-state query rate |

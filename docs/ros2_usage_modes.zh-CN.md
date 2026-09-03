@@ -103,6 +103,8 @@ bridge 是唯一的高级运控客户端，内部完成连接、按需取权、�
 
 示例入口：
 
+远程 PC/开发主机使用 Host Domain：
+
 ```bash
 UNIUBI_TEST_ROS_DOMAIN_ID=42 \
 UNIUBI_TEST_SERVICE_NAME=robotServer \
@@ -111,11 +113,22 @@ UNIUBI_TEST_DEVICE_ID=<device-id> \
 ros2 run uniubi_motion_client motion_high_level_client_example
 ```
 
+在机器人“大脑”Orin 上运行时改为：
+
+```bash
+UNIUBI_TEST_ROS_DOMAIN_ID=1 \
+UNIUBI_TEST_SERVICE_NAME=cerebellumServer \
+UNIUBI_TEST_EVENT_TOPIC=/robotCereServer/Event \
+UNIUBI_TEST_DEVICE_ID="$(python3 -c 'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')" \
+ros2 run uniubi_motion_client motion_high_level_client_example
+```
+
 示例中的真实运动默认关闭，构建或启动成功不代表实机动作已经验证。
 
 ## 方式三：DDS / ROS 2 协议直连
 
-协议直连绕过 bridge 和 `uniubi_motion_client` 的业务封装，直接使用 robotServer 的完整通信协议：
+协议直连绕过 bridge 和 `uniubi_motion_client` 的业务封装，按运行位置直接使用
+`cerebellumServer` 或 `robotServer` 的通信协议：
 
 ```text
 RPC 请求/响应       查询、配置、控制权和动作控制
@@ -157,8 +170,8 @@ TRC 控制 topic       高频实时控制帧
 
 ### RPC、Event 和控制
 
-应用直接使用 `uniubi/srv/System` 调用 robotServer。它适合查询能力、查询状态、验证新 RPC，
-以及定位问题发生在业务封装、client 还是 robotServer。
+应用直接使用 `uniubi/srv/System` 调用所选 RPC service。它适合查询能力、查询状态、验证新 RPC，
+以及定位问题发生在业务封装、client 还是服务端。
 
 只读 RPC 不需要控制权。控制类 RPC 则要求调用方自行完成：
 
@@ -166,7 +179,7 @@ TRC 控制 topic       高频实时控制帧
 takeMotionControl
 → 保存 controller/lease/rawActionId
 → renewMotionControl
-→ 解析 /robotServer/Event
+→ 按运行位置解析对应 Event topic 和外层封装
 → 控制调用
 → stopMotionAction
 → releaseMotionControl
