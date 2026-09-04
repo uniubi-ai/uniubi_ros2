@@ -57,6 +57,7 @@ cerebellumServer or robotServer / MotionServer
 
 - ROS 2 Humble is installed and sourced.
 - First determine whether the ROS 2 process runs on the robot's brain (Orin) or on a remote host. These locations use different DDS Domains and RPC endpoints and must not be mixed.
+- Before a remote PC communicates with the robot over ROS 2, the robot must be connected to Wi-Fi and the PC must have network reachability to the robot. PC-side Domain, interface, and `device_id` settings alone cannot bring an offline robot onto the network.
 - You know the target robot's `device_id`. It is the `deviceNo` in device information (the robot SN). Orin can read it from `/tmp/deviceInfo`; a remote host must configure the target SN explicitly. This field routes RPC calls but cannot isolate raw DDS topics.
 - Use a separate `ROS_DOMAIN_ID` for each robot. Do not place multiple robots and their bridges in the same Domain.
 - Cyclone DDS is recommended.

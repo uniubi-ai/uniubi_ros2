@@ -98,6 +98,8 @@ Example:
 
 Use the Host Domain from a remote PC/development host:
 
+The robot must already be connected to Wi-Fi and reachable from the PC; configuring the Host Domain and target `device_id` on the PC is not sufficient while the robot is offline.
+
 ```bash
 UNIUBI_TEST_ROS_DOMAIN_ID=42 \
 UNIUBI_TEST_SERVICE_NAME=robotServer \

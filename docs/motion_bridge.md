@@ -32,6 +32,8 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### On a remote PC/development host
 
+Before starting the bridge on a remote PC, connect the robot to Wi-Fi and verify that the PC can reach the robot over the current network. Configuring only the PC-side Domain, interface, and `device_id` is not sufficient while the robot is offline.
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash

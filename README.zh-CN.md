@@ -71,6 +71,8 @@ cerebellumServer 或 robotServer / MotionServer
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
   DDS Domain 和 RPC 入口，不能混用。
+- 远程 PC 通过 ROS 2 与机器人通信前，机器人必须已连接 Wi-Fi，且 PC 必须能通过当前网络
+  到达机器人；仅配置 PC 端的 Domain、网卡和 `device_id` 不能让未联网的机器人参与通信。
 - 已确认目标机器人的 `device_id`，其值为设备信息中的 `deviceNo`（机器人 SN）。Orin 可从
   `/tmp/deviceInfo` 读取；远程主机必须显式配置目标 SN。
   该字段用于 RPC 路由，不能隔离原始 DDS topic。

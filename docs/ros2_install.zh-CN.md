@@ -61,6 +61,9 @@ Domain 必须与程序运行位置匹配：
 | 机器人“大脑”Orin | `1` | `cerebellumServer` |
 | 远程 PC/开发主机 | `42` | `robotServer` |
 
+远程 PC 与机器人通信时，机器人必须已连接 Wi-Fi，并且 PC 能通过当前网络到达机器人。
+PC 端的 ROS 2 环境变量不能替代机器人的网络连接。
+
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_LOCALHOST_ONLY=0

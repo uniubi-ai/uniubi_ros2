@@ -36,6 +36,9 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### 远程 PC/开发主机
 
+在远程 PC 启动 bridge 前，机器人必须已连接 Wi-Fi，并确认 PC 能通过当前网络到达机器人。
+机器人未联网时，仅配置 PC 端的 Domain、网卡和 `device_id` 仍无法建立通信。
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash

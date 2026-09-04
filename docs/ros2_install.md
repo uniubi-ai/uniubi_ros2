@@ -67,6 +67,8 @@ The Domain must match where the process runs:
 | Robot brain (Orin) | `1` | `cerebellumServer` |
 | Remote PC/development host | `42` | `robotServer` |
 
+For remote-PC communication, the robot must be connected to Wi-Fi and reachable from the PC. ROS 2 environment variables on the PC do not replace the robot's network connection.
+
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_LOCALHOST_ONLY=0

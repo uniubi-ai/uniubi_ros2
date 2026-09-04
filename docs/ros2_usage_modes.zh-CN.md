@@ -105,6 +105,9 @@ bridge 是唯一的高级运控客户端，内部完成连接、按需取权、�
 
 远程 PC/开发主机使用 Host Domain：
 
+机器人必须已连接 Wi-Fi，并且 PC 能通过当前网络到达机器人；机器人未联网时，仅在 PC 上配置
+Host Domain 和目标 `device_id` 仍无法通信。
+
 ```bash
 UNIUBI_TEST_ROS_DOMAIN_ID=42 \
 UNIUBI_TEST_SERVICE_NAME=robotServer \

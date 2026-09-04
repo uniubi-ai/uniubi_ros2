@@ -210,7 +210,10 @@ public:
         response->error_code = result.error_code;
         response->message = result.message;
       });
-    client_node_ = std::make_shared<rclcpp::Node>("uniubi_motion_bridge_client");
+    rclcpp::NodeOptions client_node_options;
+    client_node_options.use_global_arguments(false);
+    client_node_ = std::make_shared<rclcpp::Node>(
+      "uniubi_motion_bridge_client", client_node_options);
     client_executor_ = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
     client_executor_->add_node(client_node_);
     motion_client_ = std::make_unique<MotionClient>(
