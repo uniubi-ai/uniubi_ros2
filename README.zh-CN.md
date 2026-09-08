@@ -68,6 +68,7 @@ cerebellumServer 或 robotServer / MotionServer
 
 ## 前置条件
 
+- 机器人版本必须 **大于等于 1.01.005**。低于该版本的机器人请先升级后再使用本 ROS 2 接入。
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
   DDS Domain 和 RPC 入口，不能混用。
