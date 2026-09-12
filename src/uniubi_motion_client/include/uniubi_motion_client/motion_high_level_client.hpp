@@ -14,6 +14,7 @@
 #include "uniubi/msg/motion_observed.hpp"
 #include "uniubi/msg/remote_control.hpp"
 #include "uniubi/msg/sensor_observed.hpp"
+#include "uniubi_motion_client/cere_sensor_reader.hpp"
 #include "uniubi_motion_client/system_rpc_client_base.hpp"
 
 namespace uniubi_motion_client
@@ -128,7 +129,9 @@ public:
     const std::string & device_id = "",
     const std::string & event_topic = "/robotServer/Event",
     const std::string & sensor_observed_topic = "/sensor/observed",
-    const std::string & motion_observed_topic = "/motion/observed");
+    const std::string & motion_observed_topic = "/motion/observed",
+    const std::string & sensor_observed_source = "sensor_observed",
+    const std::string & cere_motion_topic = "rt/cere/motionState");
 
   ~MotionHighLevelClient() override;
 
@@ -358,6 +361,9 @@ private:
   std::uint64_t renew_sequence_;
   std::string event_topic_;
   std::string sensor_observed_topic_;
+  std::string sensor_observed_source_;
+  std::string cere_motion_topic_;
+  std::unique_ptr<CereSensorReader> cere_sensor_reader_;
   std::string motion_observed_topic_;
   std::string controller_;
   std::uint64_t raw_action_id_;

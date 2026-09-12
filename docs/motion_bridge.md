@@ -25,6 +25,7 @@ export ROBOT_DEVICE_ID="$(python3 -c \
   'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
 
 ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p sensor_observed_source:=cere_motion_state \
   -p robot_service_name:=cerebellumServer \
   -p event_topic:=/robotCereServer/Event \
   -p device_id:="$ROBOT_DEVICE_ID"
@@ -208,3 +209,33 @@ Use raw `/motion/observed` for complete fault codes, online state, and temperatu
 | `battery_publish_rate_hz` | `1.0` | Battery-state publication rate |
 
 See `src/uniubi_motion_bridge/config/motion_bridge.yaml` for the remaining topic, frame, and motor-layout parameters.
+
+### Brain sensor observation source
+
+For Domain 1 set `sensor_observed_source:=cere_motion_state`. The client uses native DDS to read
+`rt/cere/motionState` (configurable with `cere_motion_topic`) using the existing
+`uniubi::dds_::BrainMotionState` wire type, not an identically named ROS `.msg`.
+Only frames with `hasSensor != 0` reach the existing sensor callback. Internal milliseconds are
+converted to microseconds; GPS/UWB/odometry validity flags are preserved. Invalid positioning
+samples are still published. Sensor delivery does not depend on `hasMotion`.
+
+Hosts keep the default `sensor_observed_source:=sensor_observed` and `/sensor/observed`.
+The source is explicitly configured independently of the Domain number. The native reader uses
+the ROS context Domain and `CYCLONEDDS_URI`. Use this mode only on the local brain/cerebellum
+link: `device_id` addresses RPC calls, but internal observation frames carry no device ID and
+cannot filter multiple robots sharing this topic.
+
+Building requires `ros-humble-cyclonedds` (including idlc/development files) and updated
+`uniubi_robot_msgs`. Preserve its adjacent `ros2/` and `idl/` directories when copying the repo.
+The native IDL is copied unchanged from the device repository; no additional device topic,
+SDK binary update, or wire protocol change is required.
+
+### Background motion-state queries
+
+Background `queryMotionState` uses asynchronous RPC with a fixed **1000 ms** deadline and no
+timeout parameter. At most one local pending request is retained; the existing query period
+starts after completion or timeout. Waiting does not block commands or the watchdog. Expired
+requests are removed locally and late responses cannot update status. Disconnect, shutdown,
+and relevant action-state resets cancel old queries. An on-time response handled during another
+synchronous RPC is not falsely expired when consumed later. Explicit `/motion/query_state`
+retains its existing five-second wait.

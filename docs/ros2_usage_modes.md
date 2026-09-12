@@ -112,6 +112,7 @@ When running on the robot brain (Orin), use:
 
 ```bash
 UNIUBI_TEST_ROS_DOMAIN_ID=1 \
+UNIUBI_TEST_SENSOR_OBSERVED_SOURCE=cere_motion_state \
 UNIUBI_TEST_SERVICE_NAME=cerebellumServer \
 UNIUBI_TEST_EVENT_TOPIC=/robotCereServer/Event \
 UNIUBI_TEST_DEVICE_ID="$(python3 -c 'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')" \

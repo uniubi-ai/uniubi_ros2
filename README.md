@@ -92,7 +92,7 @@ Interface names differ on other platforms. Run `ip -br addr`, identify the inter
 mkdir -p ~/ros2_ws/src
 
 git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs/ros2 ~/ros2_ws/src/uniubi
+cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
 
 git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
 cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
@@ -122,6 +122,7 @@ export ROBOT_DEVICE_ID="$(python3 -c \
   'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
 
 ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p sensor_observed_source:=cere_motion_state \
   -p robot_service_name:=cerebellumServer \
   -p event_topic:=/robotCereServer/Event \
   -p device_id:="$ROBOT_DEVICE_ID"

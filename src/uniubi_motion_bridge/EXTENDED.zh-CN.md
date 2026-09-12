@@ -69,3 +69,14 @@ ROS_DOMAIN_ID=173 ROS_LOCALHOST_ONLY=1 python3 src/uniubi_motion_bridge/test/ext
 GPS/UWB：两类外部 host 均收到话题消息，但设备的 `valid=0`，不代表有效定位；大脑 Domain 1 测试未收到消息，发现 `/sensor/observed` 只有订阅者、无发布者。当前不能宣称大脑本地 GPS/UWB 路径已通过。原生 SDK 本地观测使用的数据路径与此 DDS 话题不同。
 
 后台运动状态轮询使用 100 ms RPC 超时，本次仍出现轮询超时日志；显式 `/motion/query_state` 查询及最终姿态确认成功。后台轮询稳定性需另行处理。本节记录接口与状态证据，新增文件播放的物理声音仍需现场确认。
+
+### 2026-09-12 后续：复用大脑内部观测
+
+上述 `8b6014f` 的 Domain 1 限制已由 `cere_motion_state` 接收适配解决。
+设备侧新增的 `/sensor/observed` 发布者已撤销；大脑仍在 12 秒内收到 GPS 579 帧、UWB 578 帧，
+同时 `/sensor/observed` 发布者与接收帧数均为 0。x86 与 ARM64 Host 的原路径回归通过。
+三端接收适配测试通过，覆盖 hasSensor 门控、毫秒转微秒、有效标志和非零 beacon_id。
+本轮只验证观测，没有执行运动动作；定位 valid 仍为 0。100 ms 状态轮询问题未修改。
+配置见 [大脑观测来源](../../docs/motion_bridge.zh-CN.md)。
+
+后续已将后台状态查询改为固定 1000 ms 的异步请求，取代上述 100 ms 同步轮询。

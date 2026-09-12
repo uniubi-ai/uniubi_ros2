@@ -110,6 +110,8 @@ public:
   {
     robot_service_name_ = declare_parameter<std::string>("robot_service_name", "robotServer");
     event_topic_ = declare_parameter<std::string>("event_topic", "/robotServer/Event");
+    const auto sensor_source = declare_parameter<std::string>("sensor_observed_source", "sensor_observed");
+    const auto cere_topic = declare_parameter<std::string>("cere_motion_topic", "rt/cere/motionState");
     device_id_ = declare_parameter<std::string>("device_id", "");
     lease_ms_ = declare_parameter<int32_t>("lease_ms", 60000);
     auto_connect_ = declare_parameter<bool>("auto_connect", true);
@@ -220,10 +222,12 @@ public:
     client_executor_ = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
     client_executor_->add_node(client_node_);
     motion_client_ = std::make_unique<MotionClient>(
-      client_node_, *client_executor_, robot_service_name_, device_id_, event_topic_);
+      client_node_, *client_executor_, robot_service_name_, device_id_, event_topic_,
+      "/sensor/observed", "/motion/observed", sensor_source, cere_topic);
     motion_client_->setConnectCallback(
       [this](MotionClient::HighLevelState state, MotionClient::HighLevelError error) {
         if (state == MotionClient::kDisconnected) {
+          cancel_motion_status_query();
           current_action_.clear();
           current_linear_x_ = current_linear_y_ = current_angular_z_ = 0.0F;
           reset_velocity_tracking();
@@ -323,6 +327,7 @@ private:
     }
 
     if (motion_client_) {
+      cancel_motion_status_query();
       if (motion_client_->getState() == MotionClient::kControlled && !current_action_.empty()) {
         (void)stop_action("node shutdown");
       }
@@ -381,6 +386,7 @@ private:
     rpc_ready_ = true;
     configure_joint_states();
     clear_status_error();
+    cancel_motion_status_query();
     next_motion_status_query_at_ = {};
     publish_motion_status();
     return {true, MotionClient::kNone, "connected"};
@@ -476,6 +482,7 @@ private:
     if (success) {
       reset_velocity_tracking();
       clear_status_error();
+      cancel_motion_status_query();
       next_motion_status_query_at_ = {};
     } else {
       set_status_error(error, "stop action failed");
@@ -496,6 +503,7 @@ private:
     if (success) {
       reset_velocity_tracking();
       clear_status_error();
+      cancel_motion_status_query();
       next_motion_status_query_at_ = {};
     } else {
       set_status_error(error, "emergency stop failed");
@@ -528,6 +536,7 @@ private:
       current_action_ = action;
       reset_velocity_tracking();
       clear_status_error();
+      cancel_motion_status_query();
       next_motion_status_query_at_ = {};
     } else {
       set_status_error(error, action + " failed");
@@ -612,33 +621,76 @@ private:
     motion_status_publisher_->publish(message);
   }
 
+  void cancel_motion_status_query()
+  {
+    ++motion_status_query_sequence_;
+    motion_status_response_at_.reset();
+    if (pending_motion_status_query_) {
+      motion_client_->remove_pending_request(pending_motion_status_query_->request_id);
+      pending_motion_status_query_.reset();
+    }
+  }
+
   void update_motion_status()
   {
-    const auto now_steady = std::chrono::steady_clock::now();
-    if (now_steady < next_motion_status_query_at_) {
-      return;
-    }
-    next_motion_status_query_at_ = now_steady + motion_status_publish_period_;
-
+    const auto now = std::chrono::steady_clock::now();
     if (!rpc_ready_ || motion_client_->getState() == MotionClient::kDisconnected) {
+      cancel_motion_status_query();
       return;
     }
 
-    std::string state_json;
-    if (!motion_client_->queryMotionState(state_json, 100)) {
-      set_status_error(
-        motion_client_->getLastError(), "queryMotionState failed", true);
-      publish_motion_status();
-      return;
-    }
-
-    Json::CharReaderBuilder builder;
     Json::Value root;
-    std::string parse_error;
-    std::istringstream stream(state_json);
-    if (!Json::parseFromStream(builder, stream, &root, &parse_error) || !root.isObject()) {
-      set_status_error(
-        MotionClient::kRpcCallFailed, "queryMotionState returned invalid JSON", true);
+    try {
+      if (!pending_motion_status_query_) {
+        if (now < next_motion_status_query_at_) {return;}
+        // Fixed deadline: polling never blocks the command/watchdog worker.
+        const auto sequence = ++motion_status_query_sequence_;
+        motion_status_response_at_.reset();
+        pending_motion_status_query_.emplace(motion_client_->async_call(
+          uniubi_motion_client::SystemRpcCall(
+            "robotAppService", "queryMotionState", Json::Value(Json::objectValue),
+            motion_client_->client_id(), motion_client_->device_id(), MotionClient::now_ms()),
+          [this, sequence](MotionClient::SharedFuture) {
+            if (sequence == motion_status_query_sequence_) {
+              motion_status_response_at_ = std::chrono::steady_clock::now();
+            }
+          }));
+        motion_status_query_deadline_ = now + std::chrono::seconds(1);
+        return;
+      }
+      // A different synchronous command can delay consumption of an on-time reply.
+      if (motion_status_response_at_.value_or(now) >= motion_status_query_deadline_) {
+        throw std::runtime_error("queryMotionState timed out after 1000 ms");
+      }
+      if (pending_motion_status_query_->wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        return;
+      }
+      const auto response = pending_motion_status_query_->get();
+      pending_motion_status_query_.reset();
+      next_motion_status_query_at_ = now + motion_status_publish_period_;
+      if (!response || response->code != 0) {
+        throw std::runtime_error("queryMotionState RPC failed");
+      }
+      Json::Value payload;
+      Json::CharReaderBuilder builder;
+      std::string parse_error;
+      std::istringstream stream(response->payload);
+      if (!Json::parseFromStream(builder, stream, &payload, &parse_error) || !payload.isObject() ||
+        !payload["result"].isBool())
+      {
+        throw std::runtime_error("queryMotionState returned invalid response");
+      }
+      if (!payload["result"].asBool()) {
+        set_status_error(MotionClient::kActionRejected, "queryMotionState rejected", true);
+        publish_motion_status();
+        return;
+      }
+      root = payload["params"].isNull() ? Json::Value(Json::objectValue) : payload["params"];
+      if (!root.isObject()) {throw std::runtime_error("queryMotionState returned invalid state");}
+    } catch (const std::exception & error) {
+      cancel_motion_status_query();
+      next_motion_status_query_at_ = now + motion_status_publish_period_;
+      set_status_error(MotionClient::kRpcCallFailed, error.what(), true);
       publish_motion_status();
       return;
     }
@@ -844,6 +896,7 @@ private:
           // Explicit service commands have SDK persistent semantics. A later cmd_vel
           // takes over and re-enables its watchdog. Discard older pending velocities.
           reset_velocity_tracking();
+          cancel_motion_status_query();
           next_motion_status_query_at_ = {};
         }
         return ok;
@@ -1217,6 +1270,10 @@ private:
   bool rpc_ready_{false};
   std::chrono::steady_clock::time_point next_battery_publish_at_{};
   std::chrono::milliseconds battery_publish_period_{1000};
+  std::optional<MotionClient::SharedFutureAndRequestId> pending_motion_status_query_;
+  std::optional<std::chrono::steady_clock::time_point> motion_status_response_at_;
+  uint64_t motion_status_query_sequence_ = 0;
+  std::chrono::steady_clock::time_point motion_status_query_deadline_{};
   std::chrono::steady_clock::time_point next_motion_status_query_at_{};
   std::chrono::milliseconds motion_status_publish_period_{100};
 };

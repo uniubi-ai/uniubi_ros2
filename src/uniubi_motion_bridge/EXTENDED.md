@@ -66,3 +66,16 @@ URL addition requires `id`, `name`, and `url`; the WAV test also used `wav:true`
 Both external hosts received GPS/UWB messages with `valid=0`, not valid positioning. The brain Domain 1 test received none: `/sensor/observed` had a subscriber but no discovered publisher. The local brain GPS/UWB path is therefore not validated. Native SDK local observations use a different data path.
 
 Background motion-state polling still logged timeouts with its 100 ms RPC deadline; explicit `/motion/query_state` calls and final state checks succeeded. Background polling stability requires separate work. These results establish interface/state behavior; physical output of the new file-playback tests still needs on-site confirmation.
+
+### 2026-09-12 follow-up: reuse internal brain observations
+
+The Domain 1 limitation recorded above for `8b6014f` is resolved by the `cere_motion_state` adapter.
+The additional device `/sensor/observed` publisher was removed. The brain still received 579 GPS
+and 578 UWB samples in 12 seconds while that standard topic had zero publishers and zero samples.
+The existing x86 and ARM64 Host paths passed regression checks. Adapter tests passed on all three
+platforms, covering hasSensor gating, milliseconds to microseconds, validity, and a nonzero beacon ID.
+No hardware motion actions were issued in this run. Position validity remains zero and the 100 ms
+status polling behavior is unchanged. See [configuration](../../docs/motion_bridge.md).
+
+A subsequent change replaces the above 100 ms synchronous background polling with a fixed
+1000 ms asynchronous request.

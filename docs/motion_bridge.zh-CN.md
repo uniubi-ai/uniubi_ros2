@@ -29,6 +29,7 @@ export ROBOT_DEVICE_ID="$(python3 -c \
   'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
 
 ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p sensor_observed_source:=cere_motion_state \
   -p robot_service_name:=cerebellumServer \
   -p event_topic:=/robotCereServer/Event \
   -p device_id:="$ROBOT_DEVICE_ID"
@@ -235,3 +236,28 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 
 其余 topic、frame 和电机布局参数见
 `src/uniubi_motion_bridge/config/motion_bridge.yaml`。
+
+### 大脑传感器观测来源
+
+Domain 1 使用 `sensor_observed_source:=cere_motion_state`，客户端原生 DDS 订阅
+`rt/cere/motionState`（可用 `cere_motion_topic` 配置），复用设备现有
+`uniubi::dds_::BrainMotionState`。它不是普通 ROS2 消息类型，不能直接用同名 `.msg` 替代。
+只有 `hasSensor != 0` 的帧进入现有传感器回调；内部毫秒时间戳转换为微秒，GPS/UWB/里程计
+有效标志保持原值。无效定位仍会发布，不能当成定位有效。`hasMotion` 不作为传感器门控。
+
+Host 默认 `sensor_observed_source:=sensor_observed`，继续订阅 `/sensor/observed`。
+来源选择与 Domain 数字独立；只设置 `ROS_DOMAIN_ID=1` 不会自动切换来源。
+原生接收器使用同一 ROS context 的 Domain 和 `CYCLONEDDS_URI` 网络配置，限机器人本地
+大小脑链路使用。`device_id` 用于 RPC 寻址，内部观测消息本身不带设备 ID，不提供跨设备筛选。
+
+构建需要 `ros-humble-cyclonedds`（含 idlc 和开发文件），并需更新 `uniubi_robot_msgs`。
+复制消息仓库时保留 `ros2/` 与 `idl/` 的相邻目录结构，不再只复制 `ros2/`。
+公开 IDL 原样同步自主仓，不需要新增设备话题、更新 SDK 动态库或修改设备协议。
+
+### 后台运动状态查询
+
+后台 `queryMotionState` 使用异步 RPC，超时固定为 **1000 ms**，不提供超时配置参数。
+同时最多保留一个本地待完成请求，完成或超时后等待现有查询周期再发起下一次；
+慢查询不会阻塞命令队列或看门狗。超时请求会从客户端清理，迟到响应不再更新状态。
+断开、退出及相关动作状态重置时会取消旧查询。其他同步 RPC 执行期间已在期限内处理的
+响应不会因稍后才消费结果而被误报超时。显式 `/motion/query_state` 仍使用原来的 5 秒等待。

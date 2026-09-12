@@ -1,5 +1,7 @@
 uniubi_motion_bridge:
   ros__parameters:
+    sensor_observed_source: sensor_observed
+    cere_motion_topic: rt/cere/motionState
     robot_service_name: robotServer
     event_topic: /robotServer/Event
     device_id: ""
