@@ -57,3 +57,15 @@ ROS_DOMAIN_ID=173 ROS_LOCALHOST_ONLY=1 python3 src/uniubi_motion_bridge/test/ext
 ```
 
 测试启动隔离的模拟 System 服务和真实 bridge，检查控制权门控、RPC 参数、错误返回、GPS/UWB 原始字段与无效标志。该测试不会连接设备，不代表新增接口已完成设备实测。
+
+## 三端设备验证（2026-09-12）
+
+基于 `8b6014f`：大脑本地（Domain 1 / cerebellumServer）、x86 host 和 ARM64 host（Domain 42 / robotServer）均完成状态查询、灯光查询/设置/恢复、音频文件 URL 新增/列表查询/播放/暂停/恢复/停止/删除，以及零速 walking → 参数更新 → laying → 释放控制权。最终查询保持 laying，测试进程正常退出。释放控制权逻辑未修改。
+
+动作请求成功不代表状态已到达：测试必须轮询确认 walking 后再更新参数，确认 laying 后再释放，不能只等待固定时间。
+
+音频 URL 新增需要 `id`、`name`、`url`；本次 WAV 文件同时传 `wav:true`。URL 请求返回成功仅代表受理，须轮询列表确认文件入库后再播放。本次本地 `file` 路径请求被设备拒绝，未确认该路径方式通过。
+
+GPS/UWB：两类外部 host 均收到话题消息，但设备的 `valid=0`，不代表有效定位；大脑 Domain 1 测试未收到消息，发现 `/sensor/observed` 只有订阅者、无发布者。当前不能宣称大脑本地 GPS/UWB 路径已通过。原生 SDK 本地观测使用的数据路径与此 DDS 话题不同。
+
+后台运动状态轮询使用 100 ms RPC 超时，本次仍出现轮询超时日志；显式 `/motion/query_state` 查询及最终姿态确认成功。后台轮询稳定性需另行处理。本节记录接口与状态证据，新增文件播放的物理声音仍需现场确认。
