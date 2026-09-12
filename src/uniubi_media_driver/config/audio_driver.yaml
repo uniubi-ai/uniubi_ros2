@@ -1,0 +1,11 @@
+uniubi_media_driver:
+  ros__parameters:
+    enable_video: false
+    audio_capture: true
+    audio_playback: true
+    audio_channel: 0
+    audio_volume: 20
+    # Local brain: leave host/device_id empty. External host: set all three.
+    host: ""
+    device_id: ""
+    network_interface: ""

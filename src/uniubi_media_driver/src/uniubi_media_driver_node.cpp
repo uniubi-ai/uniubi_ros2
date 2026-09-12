@@ -15,7 +15,8 @@
 #include "uniubi/robot_sdk/Media/Define.h"
 #include "uniubi/robot_sdk/Media/FrameInfo.h"
 #include "uniubi/robot_sdk/MediaBusClient.h"
-#include "uniubi/robot_sdk/MotionLowLevelClient.h"
+#include "uniubi/robot_sdk/MotionHighLevelClient.h"
+#include "audio_bridge.hpp"
 #include "uniubi/robot_sdk/MotionSdkService.h"
 
 using namespace std::chrono_literals;
@@ -74,9 +75,20 @@ public:
         "front_camera_0_optical_frame", "front_camera_1_optical_frame"});
     lazy_subscription_ = declare_parameter<bool>("lazy_subscription", true);
 
+    rcl_interfaces::msg::ParameterDescriptor fixed; fixed.read_only = true;
+    host_ = declare_parameter<std::string>("host", "", fixed);
+    device_id_ = declare_parameter<std::string>("device_id", "", fixed);
+    network_interface_ = declare_parameter<std::string>("network_interface", "", fixed);
+    enable_video_ = declare_parameter("enable_video", host_.empty(), fixed);
+    audio_ = std::make_unique<AudioBridge>(*this);
     validate_parameters();
     create_publishers();
+  }
+
+  void start()
+  {
     initialize_media_bus();
+    audio_->start(media_, connect_timeout_ms_);
 
     reconcile_timer_ = create_wall_timer(500ms, [this]() {reconcile_subscriptions();});
     reconcile_subscriptions();
@@ -88,6 +100,7 @@ public:
       reconcile_timer_->cancel();
     }
 
+    if (audio_) audio_->stop();
     std::lock_guard<std::mutex> lock(media_mutex_);
     if (media_) {
       for (std::size_t i = 0; i < streams_.size(); ++i) {
@@ -124,7 +137,7 @@ private:
 
   void validate_parameters()
   {
-    if (camera_names_.empty()) {
+    if (enable_video_ && camera_names_.empty()) {
       throw std::runtime_error("camera_names must not be empty");
     }
     if (camera_names_.size() != camera_channels_.size() ||
@@ -154,6 +167,7 @@ private:
   void create_publishers()
   {
     auto qos = rclcpp::SensorDataQoS().keep_last(1).best_effort().durability_volatile();
+    if (!enable_video_) return;
     streams_.reserve(camera_names_.size());
     for (std::size_t i = 0; i < camera_names_.size(); ++i) {
       CameraStream stream;
@@ -178,37 +192,45 @@ private:
         }
       });
 
+    if (!network_interface_.empty()) service_->setNetworkInterface(network_interface_.c_str());
     const char * config = sdk_config_file_.empty() ? nullptr : sdk_config_file_.c_str();
     if (!service_->initialService(
         config, client_id_.c_str(), static_cast<uint32_t>(sdk_init_timeout_ms_)))
     {
       throw std::runtime_error("Motion SDK initialization failed");
     }
-    if (service_->isMultiDevice()) {
-      throw std::runtime_error(
-              "MediaBus is available only in local on-board deployment, not multi-device mode");
+    const bool remote = service_->isMultiDevice();
+    if (remote && (host_.empty() || device_id_.empty() || network_interface_.empty())) {
+      throw std::runtime_error("Remote media requires host, device_id and network_interface");
     }
-
-    client_ = uniubi::RobotSdk::IMotionLowLevelClient::create();
+    if (!remote && (!host_.empty() || !device_id_.empty())) {
+      throw std::runtime_error("Local media omits host and device_id");
+    }
+    if (remote && enable_video_) {
+      throw std::runtime_error("Remote video is unsupported; set enable_video=false");
+    }
+    client_ = remote ? uniubi::RobotSdk::IMotionHighLevelClient::create(device_id_) :
+      uniubi::RobotSdk::IMotionHighLevelClient::create(false);
     if (!client_ || !client_->connect()) {
-      throw std::runtime_error("failed to start local SDK client connection");
+      throw std::runtime_error("failed to start SDK client connection");
     }
 
     const auto deadline = std::chrono::steady_clock::now() +
       std::chrono::milliseconds(connect_timeout_ms_);
-    while (client_->getState() != uniubi::RobotSdk::IMotionLowLevelClient::kConnected) {
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw std::runtime_error("timed out waiting for local SDK client connection");
+    while (client_->getState() != uniubi::RobotSdk::IMotionHighLevelClient::kConnected) {
+      if (!rclcpp::ok() || std::chrono::steady_clock::now() >= deadline) {
+        throw std::runtime_error("timed out waiting for SDK client connection");
       }
       std::this_thread::sleep_for(50ms);
     }
 
     media_ = client_->createMediaBusClient();
-    if (!media_ || !media_->setup()) {
+    if (!media_ || !media_->setup(host_)) {
       const auto error = media_ ? media_->getLastError() : -1;
       throw std::runtime_error("MediaBus setup failed, error=" + std::to_string(error));
     }
 
+    if (!enable_video_) return;
     uniubi::RobotSdk::MediaLayout layout = {};
     if (!media_->getMediaLayout(layout)) {
       throw std::runtime_error("failed to query MediaBus layout");
@@ -304,6 +326,9 @@ private:
     ++streams_[index].frames;
   }
 
+  std::unique_ptr<AudioBridge> audio_;
+  std::string host_, device_id_, network_interface_;
+  bool enable_video_ = true;
   std::string sdk_config_file_;
   std::string client_id_;
   int sdk_init_timeout_ms_ = 30000;
@@ -315,7 +340,7 @@ private:
   bool lazy_subscription_ = true;
 
   uniubi::RobotSdk::IMotionSdkService * service_ = nullptr;
-  std::shared_ptr<uniubi::RobotSdk::IMotionLowLevelClient> client_;
+  std::shared_ptr<uniubi::RobotSdk::IMotionHighLevelClient> client_;
   uniubi::RobotSdk::IMediaBusClient::Ptr media_;
   std::vector<CameraStream> streams_;
   rclcpp::TimerBase::SharedPtr reconcile_timer_;
@@ -329,6 +354,7 @@ int main(int argc, char ** argv)
   rclcpp::init(argc, argv);
   try {
     auto node = std::make_shared<uniubi_media_driver::MediaDriverNode>();
+    node->start();
     rclcpp::spin(node);
   } catch (const std::exception & error) {
     RCLCPP_FATAL(rclcpp::get_logger("uniubi_media_driver"), "%s", error.what());

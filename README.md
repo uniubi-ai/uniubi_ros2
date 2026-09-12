@@ -2,9 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and an on-board MediaBus camera driver.
+ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and a MediaBus camera and PCM audio driver.
 
-The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK locally on the aarch64 board because MediaBus is a shared-memory interface rather than a remote RPC topic.
+The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK: video uses local shared memory on the aarch64 brain, while PCM capture/playback also supports external x86 and ARM64 hosts.
 
 ## Start here
 
@@ -33,7 +33,7 @@ uniubi_robot_msgs
 uniubi_ros2
 ├── uniubi_motion_client      # Source-level RPC/DDS C++ wrapper, not an SDK shared library
 ├── uniubi_motion_bridge      # Application-facing node and bridge-specific msg/srv definitions
-└── uniubi_media_driver       # On-board MediaBus JPEG camera driver
+└── uniubi_media_driver       # MediaBus JPEG cameras and PCM audio
 ```
 
 The bridge reuses `uniubi_motion_client` internally:
@@ -103,7 +103,7 @@ colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
 ```
 
-`uniubi_media_driver` is an optional board-local package with a separate SDK dependency. See
+`uniubi_media_driver` is an optional media package with a separate SDK dependency. See
 [`src/uniubi_media_driver/README.md`](src/uniubi_media_driver/README.md) for its build and runtime setup.
 
 ## Recommended: Motion bridge
@@ -216,8 +216,11 @@ cameras; channel numbers do not claim a left/right mapping. The driver uses best
 depth-1 QoS and starts a camera stream only when that topic has a subscriber.
 
 Professional on-board perception developers should use the C++ or Python SDK MediaBus API directly
-for raw NV12/NV21, audio, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
+for raw NV12/NV21, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
 See the [media driver guide](src/uniubi_media_driver/README.md).
+
+PCM capture/playback, stream volume and reset are available through the same driver.
+See the [audio guide](src/uniubi_media_driver/AUDIO.md) for brain, x86 host and ARM64 host setup.
 
 ## Documentation
 
