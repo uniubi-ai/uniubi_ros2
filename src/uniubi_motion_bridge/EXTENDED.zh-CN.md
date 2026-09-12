@@ -64,7 +64,7 @@ ROS_DOMAIN_ID=173 ROS_LOCALHOST_ONLY=1 python3 src/uniubi_motion_bridge/test/ext
 
 动作请求成功不代表状态已到达：测试必须轮询确认 walking 后再更新参数，确认 laying 后再释放，不能只等待固定时间。
 
-音频 URL 新增需要 `id`、`name`、`url`；本次 WAV 文件同时传 `wav:true`。URL 请求返回成功仅代表受理，须轮询列表确认文件入库后再播放。本次本地 `file` 路径请求被设备拒绝，未确认该路径方式通过。
+音频 URL 新增需要 `id`、`name`、`url`；本次 WAV 文件同时传 `wav:true`。URL 请求返回成功仅代表受理，须轮询列表确认文件入库后再播放。
 
 GPS/UWB：两类外部 host 均收到话题消息，但设备的 `valid=0`，不代表有效定位；大脑 Domain 1 测试未收到消息，发现 `/sensor/observed` 只有订阅者、无发布者。当前不能宣称大脑本地 GPS/UWB 路径已通过。原生 SDK 本地观测使用的数据路径与此 DDS 话题不同。
 

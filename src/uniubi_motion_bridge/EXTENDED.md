@@ -61,7 +61,7 @@ With `8b6014f`, the local brain (Domain 1 / cerebellumServer), x86 host and ARM6
 
 Poll for walking before updating action parameters, and for laying before releasing control. Request acceptance and a fixed sleep do not prove state arrival.
 
-URL addition requires `id`, `name`, and `url`; the WAV test also used `wav:true`. Acceptance is asynchronous: poll the file list before playing. The local `file` path request was rejected in this test and is not validated.
+URL addition requires `id`, `name`, and `url`; the WAV test also used `wav:true`. Acceptance is asynchronous: poll the file list before playing.
 
 Both external hosts received GPS/UWB messages with `valid=0`, not valid positioning. The brain Domain 1 test received none: `/sensor/observed` had a subscriber but no discovered publisher. The local brain GPS/UWB path is therefore not validated. Native SDK local observations use a different data path.
 
