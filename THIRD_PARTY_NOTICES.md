@@ -5,10 +5,10 @@ notices do not change the license terms of the referenced components.
 
 ## JsonCpp
 
-- Path: `src/uniubi_interface_test/third_party/jsoncpp/`
+- Path: `src/uniubi_motion_client/third_party/jsoncpp/`
 - License: Public Domain or MIT, as stated by the upstream JsonCpp license
-- Notice file: `src/uniubi_interface_test/third_party/jsoncpp/LICENSE`
+- Notice file: `src/uniubi_motion_client/third_party/jsoncpp/LICENSE`
 - Upstream: https://github.com/open-source-parsers/jsoncpp
 
-JsonCpp is vendored for the `uniubi_interface_test` package. Redistribution
+JsonCpp is vendored for the `uniubi_motion_client` package. Redistribution
 must preserve the upstream license text included with the vendored source.

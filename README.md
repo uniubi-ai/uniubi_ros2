@@ -2,9 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and an on-board MediaBus camera driver.
+ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and a MediaBus camera and PCM audio driver.
 
-The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK locally on the aarch64 board because MediaBus is a shared-memory interface rather than a remote RPC topic.
+The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK: video uses local shared memory on the aarch64 brain, while PCM capture/playback also supports external x86 and ARM64 hosts.
 
 ## Start here
 
@@ -33,7 +33,7 @@ uniubi_robot_msgs
 uniubi_ros2
 ├── uniubi_motion_client      # Source-level RPC/DDS C++ wrapper, not an SDK shared library
 ├── uniubi_motion_bridge      # Application-facing node and bridge-specific msg/srv definitions
-└── uniubi_media_driver       # On-board MediaBus JPEG camera driver
+└── uniubi_media_driver       # MediaBus JPEG cameras and PCM audio
 ```
 
 The bridge reuses `uniubi_motion_client` internally:
@@ -55,7 +55,7 @@ cerebellumServer or robotServer / MotionServer
 
 ## Prerequisites
 
-- The robot version must be **1.01.005 or later**. Upgrade robots running an earlier version before using this ROS 2 integration.
+- The robot version must be **1.00.000 or later**. Upgrade robots running an earlier version before using this ROS 2 integration.
 - ROS 2 Humble is installed and sourced.
 - First determine whether the ROS 2 process runs on the robot's brain (Orin) or on a remote host. These locations use different DDS Domains and RPC endpoints and must not be mixed.
 - Before a remote PC communicates with the robot over ROS 2, the robot must be connected to Wi-Fi and the PC must have network reachability to the robot. PC-side Domain, interface, and `device_id` settings alone cannot bring an offline robot onto the network.
@@ -92,7 +92,7 @@ Interface names differ on other platforms. Run `ip -br addr`, identify the inter
 mkdir -p ~/ros2_ws/src
 
 git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs/ros2 ~/ros2_ws/src/uniubi
+cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
 
 git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
 cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
@@ -103,7 +103,7 @@ colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
 ```
 
-`uniubi_media_driver` is an optional board-local package with a separate SDK dependency. See
+`uniubi_media_driver` is an optional media package with a separate SDK dependency. See
 [`src/uniubi_media_driver/README.md`](src/uniubi_media_driver/README.md) for its build and runtime setup.
 
 ## Recommended: Motion bridge
@@ -122,6 +122,7 @@ export ROBOT_DEVICE_ID="$(python3 -c \
   'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
 
 ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p sensor_observed_source:=cere_motion_state \
   -p robot_service_name:=cerebellumServer \
   -p event_topic:=/robotCereServer/Event \
   -p device_id:="$ROBOT_DEVICE_ID"
@@ -216,8 +217,11 @@ cameras; channel numbers do not claim a left/right mapping. The driver uses best
 depth-1 QoS and starts a camera stream only when that topic has a subscriber.
 
 Professional on-board perception developers should use the C++ or Python SDK MediaBus API directly
-for raw NV12/NV21, audio, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
+for raw NV12/NV21, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
 See the [media driver guide](src/uniubi_media_driver/README.md).
+
+PCM capture/playback, stream volume and reset are available through the same driver.
+See the [audio guide](src/uniubi_media_driver/AUDIO.md) for brain, x86 host and ARM64 host setup.
 
 ## Documentation
 
@@ -253,3 +257,7 @@ transition. `/cmd_vel` updates the current action's supported velocity parameter
 ## License
 
 Uniubi-authored ROS 2 integration code, examples, and documentation in this repository are licensed under the Apache License 2.0. Vendored jsoncpp remains under its original license. See [LICENSE](LICENSE), [NOTICE](NOTICE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Extended business interfaces
+
+The Motion bridge provides audio-file/playlist, light, system/motion status, motor-layout and general action-parameter services, plus GPS/UWB observation topics including `beacon_id`. See the [extended interface guide](src/uniubi_motion_bridge/EXTENDED.md) for ownership requirements, semantics and examples.

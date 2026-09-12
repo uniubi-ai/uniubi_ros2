@@ -19,6 +19,7 @@ x86_64 Ubuntu 开发机均可使用对应架构的 Debian 软件包。
 sudo apt update
 sudo apt install -y \
   ros-humble-ros-base \
+  ros-humble-cyclonedds \
   ros-humble-rmw-cyclonedds-cpp \
   python3-colcon-common-extensions \
   ros-humble-ament-cmake \

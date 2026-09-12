@@ -1,9 +1,11 @@
 # UniUbi Media Driver
 
-ROS 2 driver for the two on-board front cameras exposed by UniUbi MediaBus.
+ROS 2 driver for PCM audio capture/playback and the two on-board front cameras exposed by UniUbi MediaBus.
 It forwards existing JPEG frames without decoding or re-encoding them.
 
-## Topics
+See the [audio guide](AUDIO.md) for PCM topics, playback/reset, volume, and host deployment.
+
+## Camera topics
 
 | Topic | Type | MediaBus channel |
 |---|---|---:|
@@ -21,8 +23,9 @@ data style: best effort, volatile, and depth 1.
 
 ## Platform and permissions
 
-The driver must run locally on the robot's aarch64 board. MediaBus uses local
-shared memory and is not available through a remote or multi-device SDK setup.
+Video must run locally on the robot's aarch64 board using shared memory.
+Audio also supports remote x86 and ARM64 hosts; see the [audio guide](AUDIO.md).
+For local deployment:
 The process must be allowed to access `/tmp/roudi` and the MediaBus shared-memory
 resources. Configure an appropriate service account/group/ACL for production;
 do not grant an entire application root privileges solely as a workaround.
@@ -57,10 +60,10 @@ ros2 topic hz /front_camera_0/image_raw/compressed \
 
 This package is the convenient ROS 2 path for ordinary application developers,
 remote visualization, and recording JPEG frames. Use the C++ or Python SDK
-MediaBus API directly for on-board perception, raw NV12/NV21 frames, audio,
+MediaBus API directly for on-board perception, raw NV12/NV21 frames,
 minimum-copy GPU pipelines, exact plane/stride handling, or full codec metadata.
 
 > The ROS 2 media driver is intended for general development and rapid
 > integration; it does not replace the complete MediaBus SDK. Use the SDK
-> directly for audio, raw images, and professional on-board perception
+> directly for raw images and professional on-board perception
 > pipelines.

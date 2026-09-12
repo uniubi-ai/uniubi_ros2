@@ -1,9 +1,11 @@
 # UniUbi 媒体驱动
 
-该 ROS 2 驱动封装 UniUbi MediaBus 提供的两路板载前置摄像头。驱动直接转发
+该 ROS 2 驱动封装 UniUbi MediaBus 的 PCM 音频采集/播放和两路板载前置摄像头。驱动直接转发
 MediaBus 已编码的 JPEG 帧，不进行解码或二次编码。
 
-## Topics
+PCM 话题、播放/重置、音量及 host 部署见[音频指南](AUDIO.zh-CN.md)。
+
+## 摄像头话题
 
 | Topic | 类型 | MediaBus 通道 |
 |---|---|---:|
@@ -18,8 +20,8 @@ MediaBus 编码帧订阅。QoS 使用传感器数据风格：best effort、volat
 
 ## 平台和权限
 
-驱动必须运行在机器人本机 aarch64 板端。MediaBus 使用本地共享内存，不支持远程或
-多设备 SDK 模式。进程必须有权访问 `/tmp/roudi` 和 MediaBus 共享内存资源。生产部署
+视频必须运行在机器人本机 aarch64 板端，使用本地共享内存。音频也支持外部 x86 和
+ARM64 host，见[音频指南](AUDIO.zh-CN.md)。本机模式下，进程必须有权访问 `/tmp/roudi` 和 MediaBus 共享内存资源。生产部署
 应配置合适的服务账号、用户组或 ACL，不应仅为绕过权限问题而让整个应用长期以 root 运行。
 
 ## 构建和运行
@@ -51,8 +53,8 @@ ros2 topic hz /front_camera_0/image_raw/compressed \
 ## 何时直接使用 SDK
 
 该包面向需要 ROS 2 图像、远程显示或录制 JPEG 的普通开发者。板端感知、raw
-NV12/NV21、音频、低拷贝 GPU 流水线、精确 plane/stride 处理或完整编码元数据等
+NV12/NV21、低拷贝 GPU 流水线、精确 plane/stride 处理或完整编码元数据等
 专业场景，应直接使用 C++/Python SDK 的 MediaBus API。
 
-> ROS 2 媒体驱动面向通用开发和快速集成，并不替代完整 MediaBus SDK。音频、原始图像
+> ROS 2 媒体驱动面向通用开发和快速集成，并不替代完整 MediaBus SDK。原始图像
 > 及专业板端感知场景建议直接集成 SDK。

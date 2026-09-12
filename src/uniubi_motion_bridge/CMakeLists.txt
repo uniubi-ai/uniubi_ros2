@@ -18,8 +18,11 @@ find_package(uniubi_motion_client REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotionStatus.msg"
+  "msg/GpsObserved.msg"
+  "msg/UwbObserved.msg"
+  "srv/JsonCommand.srv"
   "srv/StartMotionAction.srv"
-  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES builtin_interfaces uniubi
 )
 
 add_executable(uniubi_motion_bridge_node
@@ -49,5 +52,14 @@ install(DIRECTORY launch config
 )
 
 ament_export_dependencies(rosidl_default_runtime)
+
+if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  enable_testing()
+  add_test(NAME async_motion_status_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/async_motion_status_test.py)
+  set_tests_properties(async_motion_status_test PROPERTIES TIMEOUT 35
+    ENVIRONMENT "BRIDGE_NODE_EXECUTABLE=$<TARGET_FILE:uniubi_motion_bridge_node>;ROS_DOMAIN_ID=174;ROS_LOCALHOST_ONLY=1")
+endif()
 
 ament_package()

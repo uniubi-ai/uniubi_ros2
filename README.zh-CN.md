@@ -3,7 +3,7 @@
 [English](README.md) | **简体中文**
 
 Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、
-DDS / ROS 2 协议直连接口，以及板端 MediaBus 摄像头驱动。
+DDS / ROS 2 协议直连接口，以及 MediaBus 摄像头和 PCM 音频驱动。
 
 robotServer 原始 `.msg` / `.srv` 定义统一来自
 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs/blob/main/README.zh-CN.md)，其 ROS 2 package 名和
@@ -11,8 +11,8 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 `StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。三种运动接入方式均不链接
 `librobotMotionSdk.so`，而是通过 ROS 2 service 和 DDS topic 按运行位置对接
 `cerebellumServer` 或 `robotServer`。独立的
-`uniubi_media_driver` 需要在 aarch64 板端链接 SDK，因为 MediaBus 是本地共享内存接口，
-不是远程 robotServer topic。
+`uniubi_media_driver` 链接 SDK：视频通过 aarch64 大脑本机共享内存获取，PCM 音频采集/播放
+也支持外部 x86 和 ARM64 host。
 
 ## 从这里开始
 
@@ -46,7 +46,7 @@ uniubi_robot_msgs
 uniubi_ros2
 ├── uniubi_motion_client      # 源码形式的 RPC/DDS C++ 封装，不是 SDK 动态库
 ├── uniubi_motion_bridge      # 面向业务节点的节点及 bridge 专用 msg/srv
-└── uniubi_media_driver       # 板端 MediaBus JPEG 摄像头驱动
+└── uniubi_media_driver       # MediaBus JPEG 摄像头和 PCM 音频
 ```
 
 bridge 内部复用 `uniubi_motion_client`：
@@ -68,7 +68,7 @@ cerebellumServer 或 robotServer / MotionServer
 
 ## 前置条件
 
-- 机器人版本必须 **大于等于 1.01.005**。低于该版本的机器人请先升级后再使用本 ROS 2 接入。
+- 机器人版本必须 **大于等于 1.00.000**。低于该版本的机器人请先升级后再使用本 ROS 2 接入。
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
   DDS Domain 和 RPC 入口，不能混用。
@@ -112,7 +112,7 @@ export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><Networ
 mkdir -p ~/ros2_ws/src
 
 git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs/ros2 ~/ros2_ws/src/uniubi
+cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
 
 git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
 cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
@@ -123,7 +123,7 @@ colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
 ```
 
-`uniubi_media_driver` 是可选的板端本地包，具有单独的 SDK 依赖。构建和运行方式见
+`uniubi_media_driver` 是可选的媒体包，具有单独的 SDK 依赖。构建和运行方式见
 [`src/uniubi_media_driver/README.zh-CN.md`](src/uniubi_media_driver/README.zh-CN.md)。
 
 ## 推荐方式：Motion bridge
@@ -142,6 +142,7 @@ export ROBOT_DEVICE_ID="$(python3 -c \
   'import json; print(json.load(open("/tmp/deviceInfo"))["deviceNo"])')"
 
 ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
+  -p sensor_observed_source:=cere_motion_state \
   -p robot_service_name:=cerebellumServer \
   -p event_topic:=/robotCereServer/Event \
   -p device_id:="$ROBOT_DEVICE_ID"
@@ -243,8 +244,11 @@ MediaBus 已有的两路 JPEG，不进行二次编码：
 topic 存在订阅者时启动该路码流。
 
 板端专业感知开发应直接使用 C++/Python SDK 的 MediaBus API，以获得 raw NV12/NV21、
-音频、低拷贝 GPU 处理、plane/stride 和完整编码元数据。详见
+低拷贝 GPU 处理、plane/stride 和完整编码元数据。详见
 [媒体驱动说明](src/uniubi_media_driver/README.zh-CN.md)。
+
+同一驱动已提供 PCM 采集/播放、流音量设置和播放重置。大脑、x86 host 和 ARM64 host 的
+配置及示例见[音频指南](src/uniubi_media_driver/AUDIO.zh-CN.md)。
 
 ## 文档导航
 
@@ -286,3 +290,7 @@ High-level 控制过程中如遇紧急情况，可再次按 `M` 键，直到听�
 本仓库中的 UniUbi 原创 ROS 2 集成代码、示例和文档使用 Apache License 2.0。vendored
 jsoncpp 按其原始许可证授权。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 扩展业务接口
+
+Motion bridge 已提供音频文件/播放列表、灯光、系统与运动状态、电机布局查询、通用动作参数 service，以及 GPS/UWB 观测话题（含 `beacon_id`）。取权要求、参数语义和示例见[扩展接口指南](src/uniubi_motion_bridge/EXTENDED.zh-CN.md)。

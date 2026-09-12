@@ -82,7 +82,9 @@ public:
       service_name_,
       device_id_,
       event_topic_,
-      sensor_observed_topic_);
+      sensor_observed_topic_, "/motion/observed",
+      get_env_or_default("UNIUBI_TEST_SENSOR_OBSERVED_SOURCE", "sensor_observed"),
+      get_env_or_default("UNIUBI_TEST_CERE_MOTION_TOPIC", "rt/cere/motionState"));
     client_->setConnectCallback(
       [this](HLState state, HLError error) {
         on_connect(state, error);

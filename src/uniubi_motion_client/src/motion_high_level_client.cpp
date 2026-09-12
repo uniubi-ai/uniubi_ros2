@@ -84,7 +84,9 @@ MotionHighLevelClient::MotionHighLevelClient(
   const std::string & device_id,
   const std::string & event_topic,
   const std::string & sensor_observed_topic,
-  const std::string & motion_observed_topic)
+  const std::string & motion_observed_topic,
+  const std::string & sensor_observed_source,
+  const std::string & cere_motion_topic)
 : SystemRpcClientBase(node, ros_service_name, device_id),
   node_(node),
   executor_(executor),
@@ -94,6 +96,8 @@ MotionHighLevelClient::MotionHighLevelClient(
   renew_sequence_(0),
   event_topic_(event_topic),
   sensor_observed_topic_(sensor_observed_topic),
+  sensor_observed_source_(sensor_observed_source),
+  cere_motion_topic_(cere_motion_topic),
   motion_observed_topic_(motion_observed_topic),
   raw_action_id_(0),
   raw_control_seq_(1),
@@ -101,6 +105,9 @@ MotionHighLevelClient::MotionHighLevelClient(
   state_(kDisconnected),
   last_error_(kNone)
 {
+  if (sensor_observed_source_ != "sensor_observed" && sensor_observed_source_ != "cere_motion_state") {
+    throw std::invalid_argument("sensor_observed_source must be sensor_observed or cere_motion_state");
+  }
 }
 
 MotionHighLevelClient::~MotionHighLevelClient()
@@ -542,7 +549,9 @@ bool MotionHighLevelClient::setMotionObservedEnable(bool motion_enable, bool sen
 
   Json::Value params(Json::objectValue);
   params["motionEnable"] = motion_enable;
-  params["sensorEnable"] = sensor_enable;
+  if (sensor_observed_source_ == "sensor_observed") {
+    params["sensorEnable"] = sensor_enable;
+  }
 
   // The server starts publishing observations before replying to this RPC. Keep the
   // high-rate subscriptions out of the single-threaded executor until the reply is
@@ -668,6 +677,23 @@ bool MotionHighLevelClient::queryAudioPlayList(
     return false;
   }
 
+  return response_to_output(ret, out);
+}
+
+bool MotionHighLevelClient::addAudioFile(const std::string & params_json, int32_t timeout_ms)
+{
+  if (!ensure_controlled()) return false;
+  Json::Value params, ret;
+  if (!parse_params_json(params_json, params, "addAudioFile")) return false;
+  return rpc_call("addAudioFile", controller_, params, ret, timeout_ms, "addAudioFile");
+}
+
+bool MotionHighLevelClient::getCameraLightBrightness(std::string & out, int32_t timeout_ms)
+{
+  if (!ensure_controlled()) return false;
+  Json::Value ret;
+  if (!rpc_call("getCameraLightBrightness", controller_, null_params(), ret,
+    timeout_ms, "getCameraLightBrightness")) return false;
   return response_to_output(ret, out);
 }
 
@@ -999,6 +1025,12 @@ void MotionHighLevelClient::destroy_event_subscription()
 
 void MotionHighLevelClient::create_sensor_observed_subscription()
 {
+  if (sensor_observed_source_ == "cere_motion_state") {
+    if (!cere_sensor_reader_ && sensor_observed_callback_) {
+      cere_sensor_reader_ = std::make_unique<CereSensorReader>(node_, cere_motion_topic_, sensor_observed_callback_);
+    }
+    return;
+  }
   if (sensor_observed_subscription_ || sensor_observed_topic_.empty() ||
     !sensor_observed_callback_)
   {
@@ -1019,6 +1051,7 @@ void MotionHighLevelClient::create_sensor_observed_subscription()
 
 void MotionHighLevelClient::destroy_sensor_observed_subscription()
 {
+  cere_sensor_reader_.reset();
   sensor_observed_subscription_.reset();
 }
 

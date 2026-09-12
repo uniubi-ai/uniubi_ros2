@@ -22,6 +22,7 @@ packages in this repository without desktop GUI tools:
 sudo apt update
 sudo apt install -y \
   ros-humble-ros-base \
+  ros-humble-cyclonedds \
   ros-humble-rmw-cyclonedds-cpp \
   python3-colcon-common-extensions \
   ros-humble-ament-cmake \
