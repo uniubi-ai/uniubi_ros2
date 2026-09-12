@@ -55,7 +55,7 @@ cerebellumServer or robotServer / MotionServer
 
 ## Prerequisites
 
-- The robot version must be **1.01.005 or later**. Upgrade robots running an earlier version before using this ROS 2 integration.
+- The robot version must be **1.00.000 or later**. Upgrade robots running an earlier version before using this ROS 2 integration.
 - ROS 2 Humble is installed and sourced.
 - First determine whether the ROS 2 process runs on the robot's brain (Orin) or on a remote host. These locations use different DDS Domains and RPC endpoints and must not be mixed.
 - Before a remote PC communicates with the robot over ROS 2, the robot must be connected to Wi-Fi and the PC must have network reachability to the robot. PC-side Domain, interface, and `device_id` settings alone cannot bring an offline robot onto the network.
