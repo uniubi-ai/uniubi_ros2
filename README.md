@@ -256,3 +256,7 @@ transition. `/cmd_vel` updates the current action's supported velocity parameter
 ## License
 
 Uniubi-authored ROS 2 integration code, examples, and documentation in this repository are licensed under the Apache License 2.0. Vendored jsoncpp remains under its original license. See [LICENSE](LICENSE), [NOTICE](NOTICE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Extended business interfaces
+
+The Motion bridge provides audio-file/playlist, light, system/motion status, motor-layout and general action-parameter services, plus GPS/UWB observation topics including `beacon_id`. See the [extended interface guide](src/uniubi_motion_bridge/EXTENDED.md) for ownership requirements, semantics and examples.

@@ -289,3 +289,7 @@ High-level 控制过程中如遇紧急情况，可再次按 `M` 键，直到听�
 本仓库中的 UniUbi 原创 ROS 2 集成代码、示例和文档使用 Apache License 2.0。vendored
 jsoncpp 按其原始许可证授权。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 扩展业务接口
+
+Motion bridge 已提供音频文件/播放列表、灯光、系统与运动状态、电机布局查询、通用动作参数 service，以及 GPS/UWB 观测话题（含 `beacon_id`）。取权要求、参数语义和示例见[扩展接口指南](src/uniubi_motion_bridge/EXTENDED.zh-CN.md)。

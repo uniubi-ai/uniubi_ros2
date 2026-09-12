@@ -1,0 +1,8 @@
+# JSON object using device RPC field names. Empty means {}.
+string params_json
+---
+bool success
+int32 error_code
+string message
+# Device response JSON on successful queries; empty for commands/failures.
+string result_json

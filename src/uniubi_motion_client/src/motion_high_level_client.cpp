@@ -671,6 +671,23 @@ bool MotionHighLevelClient::queryAudioPlayList(
   return response_to_output(ret, out);
 }
 
+bool MotionHighLevelClient::addAudioFile(const std::string & params_json, int32_t timeout_ms)
+{
+  if (!ensure_controlled()) return false;
+  Json::Value params, ret;
+  if (!parse_params_json(params_json, params, "addAudioFile")) return false;
+  return rpc_call("addAudioFile", controller_, params, ret, timeout_ms, "addAudioFile");
+}
+
+bool MotionHighLevelClient::getCameraLightBrightness(std::string & out, int32_t timeout_ms)
+{
+  if (!ensure_controlled()) return false;
+  Json::Value ret;
+  if (!rpc_call("getCameraLightBrightness", controller_, null_params(), ret,
+    timeout_ms, "getCameraLightBrightness")) return false;
+  return response_to_output(ret, out);
+}
+
 bool MotionHighLevelClient::deleteAudioFile(
   const std::string & params_json,
   int32_t timeout_ms)

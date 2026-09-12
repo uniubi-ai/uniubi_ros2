@@ -245,6 +245,12 @@ public:
     const std::string & params_json = "",
     int32_t timeout_ms = 5000);
 
+  /// 添加音频文件，参数与设备 addAudioFile RPC 一致；必须持有控制权。
+  bool addAudioFile(const std::string & params_json, int32_t timeout_ms = 30000);
+
+  /// 查询灯光亮度；与 SDK 一致，必须持有控制权。
+  bool getCameraLightBrightness(std::string & out, int32_t timeout_ms = 5000);
+
   /// 删除音频文件。params_json 示例：{"id":"1"}。必须持有控制权。
   bool deleteAudioFile(
     const std::string & params_json,

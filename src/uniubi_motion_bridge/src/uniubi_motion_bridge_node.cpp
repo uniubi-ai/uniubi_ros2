@@ -1,3 +1,6 @@
+#include "uniubi_motion_bridge/srv/json_command.hpp"
+#include "uniubi_motion_bridge/msg/gps_observed.hpp"
+#include "uniubi_motion_bridge/msg/uwb_observed.hpp"
 #include <atomic>
 #include <algorithm>
 #include <chrono>
@@ -238,12 +241,19 @@ public:
     motion_client_->setSensorObservedCallback(
       [this](const uniubi::msg::SensorObserved & sensor) {
         publish_odometry(sensor.odom);
+        uniubi_motion_bridge::msg::GpsObserved gps;
+        gps.stamp = now(); gps.device_timestamp = sensor.timestamp; gps.data = sensor.gps;
+        gps_publisher_->publish(gps);
+        uniubi_motion_bridge::msg::UwbObserved uwb;
+        uwb.stamp = gps.stamp; uwb.device_timestamp = sensor.timestamp; uwb.data = sensor.uwb;
+        uwb_publisher_->publish(uwb);
       });
     motion_client_->setMotionObservedCallback(
       [this](const uniubi::msg::MotionObserved & observed) {
         publish_motion_observed(observed);
       });
 
+    create_extended_interfaces();
     worker_ = std::thread([this]() {worker_loop();});
     publish_motion_status();
 
@@ -753,6 +763,93 @@ private:
     velocity_watchdog_fired_ = false;
   }
 
+  using JsonCommand = uniubi_motion_bridge::srv::JsonCommand;
+  using JsonOperation = std::function<bool(const std::string &, std::string &)>;
+
+  void add_json_service(const std::string & name, bool controlled, JsonOperation operation)
+  {
+    json_services_.push_back(create_service<JsonCommand>(name,
+      [this, controlled, operation](const JsonCommand::Request::SharedPtr request,
+        JsonCommand::Response::SharedPtr response) {
+        const auto result = submit([this, controlled, operation, request, response]() -> CommandResult {
+          Json::CharReaderBuilder reader;
+          Json::Value params;
+          std::string error;
+          std::istringstream input(request->params_json.empty() ? "{}" : request->params_json);
+          if (!Json::parseFromStream(reader, input, &params, &error) || !params.isObject()) {
+            return {false, MotionClient::kActionRejected, "params_json must be a JSON object"};
+          }
+          if (controlled && motion_client_->getState() != MotionClient::kControlled) {
+            return {false, MotionClient::kNotControlled, "call /motion/acquire_control first"};
+          }
+          const auto connected = connect_client();
+          if (!connected.success) return connected;
+          std::string output;
+          const bool ok = operation(request->params_json.empty() ? "{}" : request->params_json, output);
+          const auto code = ok ? MotionClient::kNone : motion_client_->getLastError();
+          if (ok) response->result_json = output;
+          return {ok, code, ok ? "success" : "device request failed"};
+        });
+        response->success = result.success;
+        response->error_code = result.error_code;
+        response->message = result.message;
+      }));
+  }
+
+  void create_extended_interfaces()
+  {
+    gps_publisher_ = create_publisher<uniubi_motion_bridge::msg::GpsObserved>(
+      "gps/observed", rclcpp::SensorDataQoS());
+    uwb_publisher_ = create_publisher<uniubi_motion_bridge::msg::UwbObserved>(
+      "uwb/observed", rclcpp::SensorDataQoS());
+    acquire_control_service_ = create_service<std_srvs::srv::Trigger>("/motion/acquire_control",
+      [this](const std_srvs::srv::Trigger::Request::SharedPtr,
+        std_srvs::srv::Trigger::Response::SharedPtr response) {
+        set_response(response, submit([this]() {bool acquired = false; return acquire_control(acquired);}));
+      });
+    add_json_service("/motion/query_system_status", false,
+      [this](const std::string & , std::string & out) {return motion_client_->querySystemStatus(out);});
+    add_json_service("/motion/query_state", false,
+      [this](const std::string & , std::string & out) {return motion_client_->queryMotionState(out);});
+    add_json_service("/motion/query_motor_layout", false,
+      [this](const std::string & , std::string & out) {return motion_client_->queryMotorLayout(out);});
+    add_json_service("/audio/query_play_list", false,
+      [this](const std::string & params, std::string & out) {return motion_client_->queryAudioPlayList(out, params);});
+    add_json_service("/audio/query_play_detail", false,
+      [this](const std::string & , std::string & out) {return motion_client_->queryAudioPlayDetail(out);});
+    add_json_service("/audio/start_play", true,
+      [this](const std::string & params, std::string & ) {return motion_client_->startAudioPlay(params);});
+    add_json_service("/audio/stop_play", true,
+      [this](const std::string & , std::string & ) {return motion_client_->stopAudioPlay();});
+    add_json_service("/audio/pause_play", true,
+      [this](const std::string & , std::string & ) {return motion_client_->pauseAudioPlay();});
+    add_json_service("/audio/add_file", true,
+      [this](const std::string & params, std::string & ) {return motion_client_->addAudioFile(params);});
+    add_json_service("/audio/delete_file", true,
+      [this](const std::string & params, std::string & ) {return motion_client_->deleteAudioFile(params);});
+    add_json_service("/light/query_brightness", true,
+      [this](const std::string & , std::string & out) {return motion_client_->getCameraLightBrightness(out);});
+    add_json_service("/light/set_brightness", true,
+      [this](const std::string & params, std::string &) {
+        Json::Value value; Json::CharReaderBuilder reader; std::string error;
+        std::istringstream input(params); Json::parseFromStream(reader, input, &value, &error);
+        // The client validates the range and supplies kActionRejected on failure.
+        return motion_client_->setCameraLightBrightness(
+          value["brightness"].isInt() ? value["brightness"].asInt() : -1);
+      });
+    add_json_service("/motion/set_action_params", true,
+      [this](const std::string & params, std::string &) {
+        const bool ok = motion_client_->setActionParams(params);
+        if (ok) {
+          // Explicit service commands have SDK persistent semantics. A later cmd_vel
+          // takes over and re-enables its watchdog. Discard older pending velocities.
+          reset_velocity_tracking();
+          next_motion_status_query_at_ = {};
+        }
+        return ok;
+      });
+  }
+
   void publish_odometry(const uniubi::msg::MotionOdometry & input)
   {
     if (!input.valid) {
@@ -1055,6 +1152,10 @@ private:
     }
   }
 
+  std::vector<rclcpp::Service<JsonCommand>::SharedPtr> json_services_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr acquire_control_service_;
+  rclcpp::Publisher<uniubi_motion_bridge::msg::GpsObserved>::SharedPtr gps_publisher_;
+  rclcpp::Publisher<uniubi_motion_bridge::msg::UwbObserved>::SharedPtr uwb_publisher_;
   std::string robot_service_name_;
   std::string event_topic_;
   std::string device_id_;

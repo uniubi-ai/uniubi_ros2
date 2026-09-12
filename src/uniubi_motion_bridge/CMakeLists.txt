@@ -18,8 +18,11 @@ find_package(uniubi_motion_client REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotionStatus.msg"
+  "msg/GpsObserved.msg"
+  "msg/UwbObserved.msg"
+  "srv/JsonCommand.srv"
   "srv/StartMotionAction.srv"
-  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES builtin_interfaces uniubi
 )
 
 add_executable(uniubi_motion_bridge_node
