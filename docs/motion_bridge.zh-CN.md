@@ -69,6 +69,14 @@ bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()`
 
 如果设备有多个网卡，还必须设置 `CYCLONEDDS_URI`，明确选择机器人所在网卡。
 
+**外部主机网线直连机器人网口时**，在 `CYCLONEDDS_URI` 里加上 `<DontRoute>true</DontRoute>`：机器人 Wi-Fi 同时开启时必须加（否则 DDS 可能选中主机不可达的 Wi-Fi 地址），未开启时可加可不加：
+
+```bash
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0" priority="3" multicast="default" presence_required="false"/></Interfaces><AllowMulticast>true</AllowMulticast><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
+```
+
+`DontRoute` 只适用于与机器人同一二层/同网段（网线直连或交换机）；网络配置见[连接外设](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.zh-CN.md)。
+
 ## Services
 
 | 名称 | 类型 | 行为 |

@@ -55,6 +55,14 @@ Discovering the DDS service is not treated as connection readiness. After SDK `c
 
 On machines with multiple network interfaces, set `CYCLONEDDS_URI` to select the interface connected to the robot.
 
+**When an external host is cabled straight into the robot Ethernet port**, add `<DontRoute>true</DontRoute>` to `CYCLONEDDS_URI`. It is required when the robot Wi-Fi is also on (otherwise DDS may pick the unreachable Wi-Fi address) and optional otherwise:
+
+```bash
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0" priority="3" multicast="default" presence_required="false"/></Interfaces><AllowMulticast>true</AllowMulticast><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
+```
+
+`DontRoute` only works on the same L2/subnet as the robot (direct cable or a switch). See [Connect Peripherals](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.md) for the network setup.
+
 ## Services
 
 | Name | Type | Behavior |
