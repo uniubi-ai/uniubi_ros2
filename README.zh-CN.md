@@ -68,7 +68,7 @@ cerebellumServer 或 robotServer / MotionServer
 
 ## 前置条件
 
-- 机器人软件版本要求：[Cyvet-V1.00.000](http://192.168.1.8/RobotRelease/System/littleDog/Release/dv500/Cyvet-V1.00.000)。
+- 机器人软件版本要求：Cyvet-V1.00.000 及以上。
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
   DDS Domain 和 RPC 入口，不能混用。
