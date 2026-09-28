@@ -227,18 +227,18 @@ UNIUBI_TEST_SENSOR_OBSERVED_TOPIC=/sensor/observed \
 ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
-## Front cameras
+## Audio and video
 
-External x86 and ARM64 Linux hosts can use the RTSP backend of
-[`uniubi_media_driver`](src/uniubi_media_driver/RTSP.md) to receive the two RTSP camera streams
-and publish ROS 2 images without the robot SDK or a ROS camera node on the robot.
-See its guide for dependencies, launch arguments, timestamps and reconnect behavior. The RTSP path uses CPU decoding; consult the [performance guidance](src/uniubi_media_driver/RTSP.md#intended-use-and-performance-costs) for direct RTSP integration and hardware decoding.
-Avoid running both camera drivers with the same output topic names.
+`uniubi_media_driver` provides video and PCM audio integration independently of the Motion bridge.
+
+### Video
+
+#### Robot Orin brain: MediaBus
 
 For ordinary ROS 2 applications, run the **MediaBus video backend** of `uniubi_media_driver`
 on the **robot's Orin brain itself**. It reads local shared memory and forwards the two existing
 JPEG streams without re-encoding. Local here means the robot brain, not the cerebellum or an
-external ARM64 Linux host; external hosts use the RTSP backend described above:
+external ARM64 Linux host; external hosts use the RTSP backend described below:
 
 ```text
 /front_camera_0/image_raw/compressed
@@ -253,8 +253,20 @@ For professional perception on the robot's Orin brain, developers can use the C+
 for raw NV12/NV21, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
 See the [media driver guide](src/uniubi_media_driver/README.md).
 
-PCM capture/playback, stream volume and reset are available through the same driver.
-See the [audio guide](src/uniubi_media_driver/AUDIO.md) for brain, x86 host and ARM64 host setup.
+#### External x86/ARM64 Linux hosts: RTSP
+
+External x86 and ARM64 Linux hosts can use the RTSP backend of
+[`uniubi_media_driver`](src/uniubi_media_driver/RTSP.md) to receive the two RTSP camera streams
+and publish ROS 2 images. The RTSP backend itself does not depend on the robot SDK
+(the default full build still requires it) or a ROS camera node running on the robot.
+See its guide for dependencies, launch arguments, timestamps and reconnect behavior. The RTSP path uses CPU decoding; consult the [performance guidance](src/uniubi_media_driver/RTSP.md#intended-use-and-performance-costs) for direct RTSP integration and hardware decoding.
+Avoid running both camera drivers with the same output topic names.
+
+### Audio
+
+`uniubi_media_driver` provides PCM capture/playback, stream volume and reset through MediaBus.
+It supports the robot's Orin brain and external x86/ARM64 Linux hosts.
+See the [audio guide](src/uniubi_media_driver/AUDIO.md) for deployment configuration and examples.
 
 ## Documentation
 

@@ -254,16 +254,17 @@ UNIUBI_TEST_SENSOR_OBSERVED_TOPIC=/sensor/observed \
 ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
-## 前置双摄像头
+## 音视频
 
-外部 x86 和 ARM64 Linux 主机可使用
-[`uniubi_media_driver` 的 RTSP 后端](src/uniubi_media_driver/RTSP.zh-CN.md)，接收两路 RTSP 摄像头流并发布
-ROS 2 图像，无需机器人 SDK，也无需在机器人上启动 ROS 摄像头节点。依赖、启动参数、
-时间戳和重连行为见该包说明。当前 RTSP 路径采用 CPU 解码；性能敏感场景的直接取流与硬解建议见[选型说明](src/uniubi_media_driver/RTSP.zh-CN.md#适用场景与性能代价)。请避免两种摄像头驱动向同名话题同时发布。
+`uniubi_media_driver` 提供视频和 PCM 音频接入，独立于 Motion bridge。
+
+### 视频
+
+#### Orin 大脑本机：MediaBus
 
 普通 ROS 2 开发者可在机器人的 **Orin 大脑本机**运行 `uniubi_media_driver` 的
 **MediaBus 视频后端**，通过本地共享内存获取并直接转发两路 JPEG，不进行二次编码。
-这里的本机指机器人大脑，不是小脑，也不是外部 ARM64 Linux 主机；外部主机使用上述 RTSP 后端。
+这里的本机指机器人大脑，不是小脑，也不是外部 ARM64 Linux 主机；外部主机使用下文介绍的 RTSP 后端。
 
 ```text
 /front_camera_0/image_raw/compressed
@@ -278,7 +279,17 @@ Orin 大脑本机的专业感知开发可直接使用 C++/Python SDK 的 MediaBu
 低拷贝 GPU 处理、plane/stride 和完整编码元数据。详见
 [媒体驱动说明](src/uniubi_media_driver/README.zh-CN.md)。
 
-同一驱动已提供 PCM 采集/播放、流音量设置和播放重置。大脑、x86 host 和 ARM64 host 的
+#### 外部 x86/ARM64 Linux 主机：RTSP
+
+外部 x86 和 ARM64 Linux 主机可使用
+[`uniubi_media_driver` 的 RTSP 后端](src/uniubi_media_driver/RTSP.zh-CN.md)，接收两路 RTSP 摄像头流并发布
+ROS 2 图像。RTSP 后端本身不依赖机器人 SDK（默认全量构建仍需 SDK），也无需在机器人上启动 ROS 摄像头节点。依赖、启动参数、
+时间戳和重连行为见该包说明。当前 RTSP 路径采用 CPU 解码；性能敏感场景的直接取流与硬解建议见[选型说明](src/uniubi_media_driver/RTSP.zh-CN.md#适用场景与性能代价)。请避免两种摄像头驱动向同名话题同时发布。
+
+### 音频
+
+`uniubi_media_driver` 通过 MediaBus 提供 PCM 采集/播放、流音量设置和播放重置，
+支持 Orin 大脑本机及外部 x86/ARM64 Linux 主机。各部署方式的
 配置及示例见[音频指南](src/uniubi_media_driver/AUDIO.zh-CN.md)。
 
 ## 文档导航
