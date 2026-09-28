@@ -2,9 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and a MediaBus camera and PCM audio driver.
+ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and a media driver with MediaBus/RTSP camera backends and PCM audio.
 
-The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The separate `uniubi_media_driver` links the SDK: video uses local shared memory on the aarch64 brain, while PCM capture/playback also supports external x86 and ARM64 hosts.
+The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The MediaBus backend of `uniubi_media_driver` links the SDK: video uses local shared memory on the aarch64 brain, while PCM capture/playback also supports external x86 and ARM64 hosts. Its optional RTSP video backend can be built without the SDK.
 
 ## Start here
 
@@ -33,7 +33,7 @@ uniubi_robot_msgs
 uniubi_ros2
 ├── uniubi_motion_client      # Source-level RPC/DDS C++ wrapper, not an SDK shared library
 ├── uniubi_motion_bridge      # Application-facing node and bridge-specific msg/srv definitions
-└── uniubi_media_driver       # MediaBus JPEG cameras and PCM audio
+└── uniubi_media_driver       # MediaBus / RTSP cameras and PCM audio
 ```
 
 The bridge reuses `uniubi_motion_client` internally:
@@ -228,6 +228,12 @@ ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
 ## Front cameras
+
+External x86 and ARM64 Linux hosts can use the RTSP backend of
+[`uniubi_media_driver`](src/uniubi_media_driver/RTSP.md) to receive the two RTSP camera streams
+and publish ROS 2 images without the robot SDK or a ROS camera node on the robot.
+See its guide for dependencies, launch arguments, timestamps and reconnect behavior. The RTSP path uses CPU decoding; consult the [performance guidance](src/uniubi_media_driver/RTSP.md#intended-use-and-performance-costs) for direct RTSP integration and hardware decoding.
+Avoid running both camera drivers with the same output topic names.
 
 For ordinary ROS 2 applications, run the independent `uniubi_media_driver` locally on the robot's
 aarch64 board. It forwards the two existing MediaBus JPEG streams without re-encoding:

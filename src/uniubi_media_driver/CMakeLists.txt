@@ -5,6 +5,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+option(UNIUBI_MEDIA_WITH_SDK "Build the MediaBus driver (requires UniubiRobotSdk)" ON)
+option(UNIUBI_MEDIA_WITH_RTSP "Build the FFmpeg RTSP video backend" ON)
+if(NOT UNIUBI_MEDIA_WITH_SDK AND NOT UNIUBI_MEDIA_WITH_RTSP)
+  message(FATAL_ERROR "Enable at least one uniubi_media_driver backend")
+endif()
+
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -14,46 +20,48 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME} "msg/AudioFrame.msg" DEPENDENCIES std_msgs)
 rosidl_get_typesupport_target(audio_typesupport ${PROJECT_NAME} "rosidl_typesupport_cpp")
 ament_export_dependencies(rosidl_default_runtime)
-find_package(UniubiRobotSdk CONFIG REQUIRED)
 
-if(NOT TARGET Uniubi::MediaBus)
-  message(FATAL_ERROR
-    "uniubi_media_driver requires the MediaBus runtime from UniubiRobotSdk")
+if(UNIUBI_MEDIA_WITH_SDK)
+  find_package(UniubiRobotSdk CONFIG REQUIRED)
+  if(NOT TARGET Uniubi::MediaBus)
+    message(FATAL_ERROR "uniubi_media_driver requires the MediaBus runtime from UniubiRobotSdk")
+  endif()
+  add_executable(uniubi_media_driver_node src/uniubi_media_driver_node.cpp)
+  target_compile_features(uniubi_media_driver_node PUBLIC cxx_std_17)
+  ament_target_dependencies(uniubi_media_driver_node rclcpp sensor_msgs std_srvs)
+  target_link_libraries(uniubi_media_driver_node
+    Uniubi::RobotMotionSdk Uniubi::MediaBus "${audio_typesupport}")
+  install(TARGETS uniubi_media_driver_node DESTINATION lib/${PROJECT_NAME})
+  install(PROGRAMS scripts/play_pcm.py scripts/capture_pcm.py DESTINATION lib/${PROJECT_NAME})
 endif()
 
-add_executable(uniubi_media_driver_node
-  src/uniubi_media_driver_node.cpp
-)
-target_compile_features(uniubi_media_driver_node PUBLIC cxx_std_17)
-ament_target_dependencies(uniubi_media_driver_node
-  rclcpp
-  sensor_msgs
-  std_srvs
-)
-target_link_libraries(uniubi_media_driver_node
-  Uniubi::RobotMotionSdk
-  Uniubi::MediaBus
-  "${audio_typesupport}"
-)
+if(UNIUBI_MEDIA_WITH_RTSP)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswscale)
+  add_executable(uniubi_rtsp_driver_node src/uniubi_rtsp_driver_node.cpp)
+  target_compile_features(uniubi_rtsp_driver_node PUBLIC cxx_std_17)
+  ament_target_dependencies(uniubi_rtsp_driver_node rclcpp sensor_msgs)
+  target_link_libraries(uniubi_rtsp_driver_node PkgConfig::FFMPEG)
+  install(TARGETS uniubi_rtsp_driver_node DESTINATION lib/${PROJECT_NAME})
+endif()
 
-install(TARGETS uniubi_media_driver_node
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-install(DIRECTORY config launch
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(PROGRAMS scripts/play_pcm.py scripts/capture_pcm.py DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY config launch DESTINATION share/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_audio_queue test/test_audio_queue.cpp)
-  target_include_directories(test_audio_queue PRIVATE src)
-  target_link_libraries(test_audio_queue "${audio_typesupport}")
-  ament_add_gtest(test_audio_bridge test/test_audio_bridge.cpp)
-  target_compile_features(test_audio_bridge PRIVATE cxx_std_17)
-  target_include_directories(test_audio_bridge PRIVATE src)
-  ament_target_dependencies(test_audio_bridge rclcpp std_srvs)
-  target_link_libraries(test_audio_bridge "${audio_typesupport}" Uniubi::MediaBus)
+  if(UNIUBI_MEDIA_WITH_SDK)
+    ament_add_gtest(test_audio_queue test/test_audio_queue.cpp)
+    target_include_directories(test_audio_queue PRIVATE src)
+    target_link_libraries(test_audio_queue "${audio_typesupport}")
+    ament_add_gtest(test_audio_bridge test/test_audio_bridge.cpp)
+    target_compile_features(test_audio_bridge PRIVATE cxx_std_17)
+    target_include_directories(test_audio_bridge PRIVATE src)
+    ament_target_dependencies(test_audio_bridge rclcpp std_srvs)
+    target_link_libraries(test_audio_bridge "${audio_typesupport}" Uniubi::MediaBus)
+  endif()
+  if(UNIUBI_MEDIA_WITH_RTSP)
+    ament_add_gtest(test_rtsp_config test/test_rtsp_config.cpp)
+    target_compile_features(test_rtsp_config PRIVATE cxx_std_17)
+    target_include_directories(test_rtsp_config PRIVATE src)
+  endif()
 endif()
 ament_package()

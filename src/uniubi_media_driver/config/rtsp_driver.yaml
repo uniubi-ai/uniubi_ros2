@@ -1,0 +1,11 @@
+uniubi_rtsp_driver:
+  ros__parameters:
+    rtsp_urls: []
+    camera_names: [front_camera_0, front_camera_1]
+    frame_ids: [front_camera_0_optical_frame, front_camera_1_optical_frame]
+    topic_prefix: ""
+    open_timeout_ms: 5000
+    read_timeout_ms: 2000
+    reconnect_delay_ms: 1000
+    publish_compressed: false
+    jpeg_quality: 80

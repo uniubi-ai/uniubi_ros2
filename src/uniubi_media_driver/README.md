@@ -1,5 +1,7 @@
 # UniUbi Media Driver
 
+This package also provides an [RTSP video backend](RTSP.md) for general ROS image integration. It currently uses CPU decoding. For low latency, high frame rates, or GPU perception, consider direct RTSP integration with explicitly configured hardware decoding where supported. See [intended use and performance costs](RTSP.md#intended-use-and-performance-costs). The JPEG forwarding behavior below describes the MediaBus backend.
+
 ROS 2 driver for PCM audio capture/playback and the two on-board front cameras exposed by UniUbi MediaBus.
 It forwards existing JPEG frames without decoding or re-encoding them.
 
@@ -23,6 +25,10 @@ data style: best effort, volatile, and depth 1.
 
 ## Platform and permissions
 
+For RTSP video on external hosts, select this package's [RTSP backend](RTSP.md),
+which can be built without the robot SDK. The local-only restrictions below apply
+to the MediaBus video backend.
+
 Video must run locally on the robot's aarch64 board using shared memory.
 Audio also supports remote x86 and ARM64 hosts; see the [audio guide](AUDIO.md).
 For local deployment:
@@ -32,20 +38,37 @@ do not grant an entire application root privileges solely as a workaround.
 
 ## Build and run
 
+The default build includes MediaBus (video/PCM audio) and RTSP without backend flags. Prepare ROS 2 Humble and install the system dependencies:
+
+```bash
+sudo apt install libavformat-dev libavcodec-dev \
+  libavutil-dev libswscale-dev pkg-config
+```
+
 Install `uniubi_robot_sdk` first so that CMake can find
 `UniubiRobotSdkConfig.cmake`, then build the package in a ROS 2 workspace:
 
 ```bash
-cmake -S ~/uniubi_robot_sdk -B /tmp/uniubi_robot_sdk_build
+source /opt/ros/humble/setup.bash
+cmake -S ~/uniubi_robot_sdk -B /tmp/uniubi_robot_sdk_build -DBUILD_SDK_CPP_EXAMPLES=OFF
 cmake --install /tmp/uniubi_robot_sdk_build --prefix ~/uniubi_robot_sdk_install
 
 cd ~/ros2_ws
-colcon build --packages-select uniubi_media_driver \
-  --cmake-args -DCMAKE_PREFIX_PATH="$HOME/uniubi_robot_sdk_install"
-. install/setup.bash
+export CMAKE_PREFIX_PATH="$HOME/uniubi_robot_sdk_install:${CMAKE_PREFIX_PATH:-}"
+colcon build --packages-select uniubi_media_driver
+source install/setup.bash
 export LD_LIBRARY_PATH="$HOME/uniubi_robot_sdk_install/lib/aarch64:${LD_LIBRARY_PATH:-}"
 ros2 launch uniubi_media_driver media_driver.launch.py
 ```
+
+Select the video source at launch. The command above starts local MediaBus; for remote RTSP use:
+
+```bash
+ros2 launch uniubi_media_driver media_driver.launch.py \
+  video_backend:=rtsp host:=192.168.1.10
+```
+
+For an external ARM64 host, install the SDK with `-DPLATFORM=aarch64_host`; choose the matching SDK library directory: `aarch64` (brain), `x86_64`, or `aarch64_host`. See the [RTSP guide](RTSP.md) for minimal builds and old build caches.
 
 Inspect one stream:
 

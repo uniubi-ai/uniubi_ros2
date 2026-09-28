@@ -10,6 +10,8 @@
 
 ## Build
 
+The media package builds both MediaBus and RTSP by default. Install the SDK and FFmpeg development libraries using the [build guide](README.md#build-and-run). Audio usage is unchanged.
+
 Use the updated C++ SDK with `createAudioRawBack`. The new audio message belongs to `uniubi_media_driver`; no changes to `uniubi_robot_msgs` are needed.
 
 ```bash

@@ -10,6 +10,8 @@
 
 ## 构建
 
+媒体包默认同时编译 MediaBus 和 RTSP；请先按[构建说明](README.zh-CN.md#构建和运行)安装 SDK 和 FFmpeg 开发库。音频使用方式不变。
+
 使用本次更新的 `uniubi_robot_sdk`（需提供 `createAudioRawBack` 接口），先安装 SDK，再构建 ROS 2 包。无需修改已有 `uniubi_robot_msgs`；新音频消息属于 `uniubi_media_driver`。
 
 ```bash

@@ -3,7 +3,7 @@
 [English](README.md) | **简体中文**
 
 Uniubi 机器人的 ROS 2 接入仓库，提供运动控制 bridge、可复用的 C++ ROS 2 客户端、
-DDS / ROS 2 协议直连接口，以及 MediaBus 摄像头和 PCM 音频驱动。
+DDS / ROS 2 协议直连接口，以及 MediaBus/RTSP 摄像头和 PCM 音频驱动。
 
 robotServer 原始 `.msg` / `.srv` 定义统一来自
 [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs/blob/main/README.zh-CN.md)，其 ROS 2 package 名和
@@ -11,8 +11,8 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 `StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。三种运动接入方式均不链接
 `librobotMotionSdk.so`，而是通过 ROS 2 service 和 DDS topic 按运行位置对接
 `cerebellumServer` 或 `robotServer`。独立的
-`uniubi_media_driver` 链接 SDK：视频通过 aarch64 大脑本机共享内存获取，PCM 音频采集/播放
-也支持外部 x86 和 ARM64 host。
+`uniubi_media_driver` 的 MediaBus 后端链接 SDK：视频通过 aarch64 大脑本机共享内存获取，PCM 音频采集/播放
+也支持外部 x86 和 ARM64 host。可选的 RTSP 视频后端支持不依赖 SDK 构建。
 
 ## 从这里开始
 
@@ -46,7 +46,7 @@ uniubi_robot_msgs
 uniubi_ros2
 ├── uniubi_motion_client      # 源码形式的 RPC/DDS C++ 封装，不是 SDK 动态库
 ├── uniubi_motion_bridge      # 面向业务节点的节点及 bridge 专用 msg/srv
-└── uniubi_media_driver       # MediaBus JPEG 摄像头和 PCM 音频
+└── uniubi_media_driver       # MediaBus / RTSP 摄像头和 PCM 音频
 ```
 
 bridge 内部复用 `uniubi_motion_client`：
@@ -255,6 +255,11 @@ ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
 
 ## 前置双摄像头
+
+外部 x86 和 ARM64 Linux 主机可使用
+[`uniubi_media_driver` 的 RTSP 后端](src/uniubi_media_driver/RTSP.zh-CN.md)，接收两路 RTSP 摄像头流并发布
+ROS 2 图像，无需机器人 SDK，也无需在机器人上启动 ROS 摄像头节点。依赖、启动参数、
+时间戳和重连行为见该包说明。当前 RTSP 路径采用 CPU 解码；性能敏感场景的直接取流与硬解建议见[选型说明](src/uniubi_media_driver/RTSP.zh-CN.md#适用场景与性能代价)。请避免两种摄像头驱动向同名话题同时发布。
 
 普通 ROS 2 开发者在机器人 aarch64 板端运行独立的 `uniubi_media_driver`。驱动直接转发
 MediaBus 已有的两路 JPEG，不进行二次编码：
