@@ -58,7 +58,7 @@ cerebellumServer or robotServer / MotionServer
 - Required robot software version: Cyvet-V1.00.000 or newer.
 - ROS 2 Humble is installed and sourced.
 - First determine whether the ROS 2 process runs on the robot's brain (Orin) or on a remote host. These locations use different DDS Domains and RPC endpoints and must not be mixed.
-- Before a remote PC communicates with the robot over ROS 2, the robot must be connected to Wi-Fi and the PC must have network reachability to the robot. PC-side Domain, interface, and `device_id` settings alone cannot bring an offline robot onto the network.
+- An external PC/development host can use a Wi-Fi network or a direct Ethernet cable to the robot port. Establish network reachability before configuring the ROS 2 Domain, interface, and `device_id`. A direct Ethernet connection does not require robot Wi-Fi.
 - You know the target robot's `device_id`. It is the `deviceNo` in device information (the robot SN). Orin can read it from `/tmp/deviceInfo`; a remote host must configure the target SN explicitly. This field routes RPC calls but cannot isolate raw DDS topics.
 - Use a separate `ROS_DOMAIN_ID` for each robot. Do not place multiple robots and their bridges in the same Domain.
 - Cyclone DDS is recommended.
@@ -130,6 +130,11 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### Run on a remote PC/development host
 
+**Direct Ethernet connection:** First follow [Connect Peripherals: external host to robot cerebellum](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.md) to configure the host static IP and DHCP server that assigns an address to the robot Ethernet port.
+Use `ip -br addr` to identify the host wired interface, then select the direct-link `CYCLONEDDS_URI` configuration below. An external Orin development board also uses its actual wired interface, rather than the robot brain's internal `eth0.100`.
+
+The direct-link example enables `<DontRoute>true</DontRoute>` to restrict DDS to directly connected subnets and avoid selecting an unreachable address when robot Wi-Fi is also enabled. This applies to the same Layer 2 network/subnet, not routed connections. See the [Motion bridge guide](docs/motion_bridge.md) for details.
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
@@ -139,6 +144,8 @@ export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 # Replace the placeholder with the host interface connected to the robot network.
 export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+# For direct Ethernet, replace the CYCLONEDDS_URI above with this line (uncomment and set the wired interface):
+# export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \

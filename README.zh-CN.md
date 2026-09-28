@@ -72,8 +72,8 @@ cerebellumServer 或 robotServer / MotionServer
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
   DDS Domain 和 RPC 入口，不能混用。
-- 远程 PC 通过 ROS 2 与机器人通信前，机器人必须已连接 Wi-Fi，且 PC 必须能通过当前网络
-  到达机器人；仅配置 PC 端的 Domain、网卡和 `device_id` 不能让未联网的机器人参与通信。
+- 外部 PC/开发主机可通过 Wi-Fi 网络或网线直连机器人网口；先配置网络，确保主机能够
+  到达机器人，再配置 ROS 2 的 Domain、网卡和 `device_id`。网线直连不要求机器人连接 Wi-Fi。
 - 已确认目标机器人的 `device_id`，其值为设备信息中的 `deviceNo`（机器人 SN）。Orin 可从
   `/tmp/deviceInfo` 读取；远程主机必须显式配置目标 SN。
   该字段用于 RPC 路由，不能隔离原始 DDS topic。
@@ -150,6 +150,14 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### 在远程 PC/开发主机上运行
 
+**网线直连：** 先按[连接外设：外部主机直连机器人小脑](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.zh-CN.md#22-外部主机开发板--pc直连机器人小脑)配置主机静态 IP 和 DHCP，为机器人网口分配地址。
+用 `ip -br addr` 确认主机的实际有线网卡，然后使用下面的直连 `CYCLONEDDS_URI` 配置；
+外部 Orin 开发板同样使用实际有线网卡，不照抄机器人大脑内部的 `eth0.100`。
+
+直连示例启用 `<DontRoute>true</DontRoute>`，用于限制 DDS 使用直连网段的地址，
+避免机器人同时开启 Wi-Fi 时选中主机不可达的地址；它适用于同一二层/同网段，不适用于跨路由通信。
+更多说明见 [Motion bridge 文档](docs/motion_bridge.zh-CN.md)。
+
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
@@ -159,6 +167,8 @@ export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 # 将接口名替换为远程主机上实际连接机器人网络的网卡
 export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+# 网线直连时，将上一条 CYCLONEDDS_URI 替换为下面这条（取消注释并填写实际有线网卡）：
+# export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
