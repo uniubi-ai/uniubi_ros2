@@ -72,17 +72,3 @@ source install-rtsp/setup.bash
 Normal users do not need these flags: `UNIUBI_MEDIA_WITH_SDK` and `UNIUBI_MEDIA_WITH_RTSP` both default to `ON`.
 If an existing build directory cached `OFF`, run
 `colcon build --packages-select uniubi_media_driver --cmake-clean-cache` once to restore the full default build.
-
-## Self-test
-
-Run parameter tests with `colcon test --packages-select uniubi_media_driver`.
-The optional loopback integration test `test/rtsp_integration.py` requires `python3-gi`,
-`gir1.2-gst-rtsp-server-1.0`, GStreamer base/good/ugly plugins and `python3-opencv`.
-It validates dual MJPEG/H.264 raw/JPEG topics, reconnect, a stalled peer and bounded shutdown
-using synthetic streams; it never connects to a robot.
-
-```bash
-python3 src/uniubi_media_driver/test/rtsp_integration.py \
-  --node "$PWD/install/uniubi_media_driver/lib/uniubi_media_driver/uniubi_rtsp_driver_node" \
-  --evidence /tmp/uniubi-rtsp-integration
-```

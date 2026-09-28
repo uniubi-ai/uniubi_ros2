@@ -71,16 +71,3 @@ source install-rtsp/setup.bash
 普通用户无需设置这些开关；`UNIUBI_MEDIA_WITH_SDK` 和 `UNIUBI_MEDIA_WITH_RTSP` 默认均为 `ON`。
 如果旧构建目录曾缓存 `OFF`，更新代码后可执行一次
 `colcon build --packages-select uniubi_media_driver --cmake-clean-cache` 恢复默认全量构建。
-
-## 自测
-
-参数测试通过 `colcon test --packages-select uniubi_media_driver` 执行。
-`test/rtsp_integration.py` 是可选的回环网络集成测试，需安装 `python3-gi`、
-`gir1.2-gst-rtsp-server-1.0`、GStreamer base/good/ugly 插件和 `python3-opencv`。
-它使用合成 MJPEG/H.264 流，检查双路原图/JPEG、断流重连、单路连接卡死与及时退出；不连接机器人。
-
-```bash
-python3 src/uniubi_media_driver/test/rtsp_integration.py \
-  --node "$PWD/install/uniubi_media_driver/lib/uniubi_media_driver/uniubi_rtsp_driver_node" \
-  --evidence /tmp/uniubi-rtsp-integration
-```
