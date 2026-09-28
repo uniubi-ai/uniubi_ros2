@@ -4,9 +4,9 @@
 
 | Deployment | Runtime directory | Support |
 |---|---|---|
-| Robot brain | `lib/aarch64` | Local PCM capture/RawBack playback, alongside video |
+| Robot Orin brain (local) | `lib/aarch64` | Local PCM capture/RawBack playback, alongside video |
 | x86 Linux host | `lib/x86_64` | Remote capture/playback through the robot IP |
-| ARM64 Linux host | `lib/aarch64_host` | Remote audio; explicitly build with `PLATFORM=aarch64_host` |
+| External ARM64 Linux host | `lib/aarch64_host` | Remote audio; explicitly build with `PLATFORM=aarch64_host` |
 
 ## Build
 
@@ -32,7 +32,7 @@ ROS 2 uses its own DDS/RMW dependencies. Deliver a complete matching SDK runtime
 
 ## Run
 
-Local brain deployment retains the existing SDK configuration and shared-memory permissions:
+Deployment on the robot's Orin brain retains the existing SDK configuration and shared-memory permissions:
 
 ```bash
 ros2 launch uniubi_media_driver audio_driver.launch.py
@@ -45,7 +45,7 @@ ros2 launch uniubi_media_driver audio_driver.launch.py \
   host:=192.168.43.23 device_id:=YOUR_DEVICE_ID network_interface:=eth0
 ```
 
-The audio configuration enables capture channel 0 and playback at volume 20, with video disabled. For capture only, copy `config/audio_driver.yaml`, set `audio_playback: false`, and pass `config_file:=/absolute/path/audio.yaml`. The existing video launch remains video-only. Enable both media types in one YAML to run them together locally. Remote mode does not support video or layout queries; `enable_video=true` is rejected.
+The audio configuration enables capture channel 0 and playback at volume 20, with video disabled. For capture only, copy `config/audio_driver.yaml`, set `audio_playback: false`, and pass `config_file:=/absolute/path/audio.yaml`. The existing video launch remains video-only. Enable both media types in one YAML to run them together locally. The remote MediaBus mode does not support its video subscriptions or layout queries; `enable_video=true` is rejected. This does not restrict the separate [RTSP video backend](RTSP.md) in the same package.
 
 ## Interfaces
 

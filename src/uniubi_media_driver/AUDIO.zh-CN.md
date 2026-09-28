@@ -4,9 +4,9 @@
 
 | 部署 | SDK 库 | 能力 |
 |---|---|---|
-| 机器人大脑 | `lib/aarch64` | 本地 PCM 采集/RawBack 播放，可与视频同时启用 |
+| 机器人 Orin 大脑本机 | `lib/aarch64` | 本地 PCM 采集/RawBack 播放，可与视频同时启用 |
 | x86 Linux host | `lib/x86_64` | 通过机器人 IP 远程采集/播放 |
-| ARM64 Linux host | `lib/aarch64_host` | 同上；构建显式指定 `PLATFORM=aarch64_host` |
+| 外部 ARM64 Linux 主机 | `lib/aarch64_host` | 同上；构建显式指定 `PLATFORM=aarch64_host` |
 
 ## 构建
 
@@ -32,7 +32,7 @@ ROS 2 使用其自身的 DDS/RMW 依赖；SDK 的运行库必须完整、同版�
 
 ## 启动
 
-大脑本地模式，保留已有本地 SDK 配置与共享内存访问权限：
+Orin 大脑本机模式，保留已有本地 SDK 配置与共享内存访问权限：
 
 ```bash
 ros2 launch uniubi_media_driver audio_driver.launch.py
@@ -45,7 +45,8 @@ ros2 launch uniubi_media_driver audio_driver.launch.py \
   host:=192.168.43.23 device_id:=YOUR_DEVICE_ID network_interface:=eth0
 ```
 
-默认启动通道0采集与音量20的播放输入，`enable_video=false`。如果只需要采集，可复制 `config/audio_driver.yaml`，设置 `audio_playback: false`，通过 `config_file:=/absolute/path/audio.yaml` 加载。默认的视频 launch 仍只启用视频；本地视频与音频共用一个节点时，在同一 YAML 中显式开启对应开关。远端不支持视频或布局查询，不能设置 `enable_video=true`。
+默认启动通道0采集与音量20的播放输入，`enable_video=false`。如果只需要采集，可复制 `config/audio_driver.yaml`，设置 `audio_playback: false`，通过 `config_file:=/absolute/path/audio.yaml` 加载。默认的视频 launch 仍只启用视频；本地视频与音频共用一个节点时，在同一 YAML 中显式开启对应开关。MediaBus 远端模式不支持其视频订阅或布局查询，不能设置 `enable_video=true`；
+这不限制同包内独立的 [RTSP 视频后端](RTSP.zh-CN.md)。
 
 ## ROS 接口
 

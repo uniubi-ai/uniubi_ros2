@@ -11,7 +11,7 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 `StartMotionAction.srv` 由 `uniubi_motion_bridge` 自己维护。三种运动接入方式均不链接
 `librobotMotionSdk.so`，而是通过 ROS 2 service 和 DDS topic 按运行位置对接
 `cerebellumServer` 或 `robotServer`。独立的
-`uniubi_media_driver` 的 MediaBus 后端链接 SDK：视频通过 aarch64 大脑本机共享内存获取，PCM 音频采集/播放
+`uniubi_media_driver` 的 MediaBus 后端链接 SDK：视频通过 Orin 大脑本机共享内存获取，PCM 音频采集/播放
 也支持外部 x86 和 ARM64 host。可选的 RTSP 视频后端支持不依赖 SDK 构建。
 
 ## 从这里开始
@@ -88,7 +88,7 @@ cerebellumServer 或 robotServer / MotionServer
 以上是当前机器人运行时的接入约定；如果产品配置修改了 Domain 或 service 名称，应以目标设备的
 实际 DDS 配置为准。Domain 可发现只证明 DDS 图可见，不能替代一次只读 RPC 验证。
 
-板端和开发机的软件包清单、环境加载与验证命令见
+Orin 大脑本机和外部开发主机的软件包清单、环境加载与验证命令见
 [安装 ROS 2 Humble](docs/ros2_install.zh-CN.md)。
 
 ```bash
@@ -261,8 +261,9 @@ ros2 run uniubi_motion_client sensor_observed_subscriber
 ROS 2 图像，无需机器人 SDK，也无需在机器人上启动 ROS 摄像头节点。依赖、启动参数、
 时间戳和重连行为见该包说明。当前 RTSP 路径采用 CPU 解码；性能敏感场景的直接取流与硬解建议见[选型说明](src/uniubi_media_driver/RTSP.zh-CN.md#适用场景与性能代价)。请避免两种摄像头驱动向同名话题同时发布。
 
-普通 ROS 2 开发者在机器人 aarch64 板端运行独立的 `uniubi_media_driver`。驱动直接转发
-MediaBus 已有的两路 JPEG，不进行二次编码：
+普通 ROS 2 开发者可在机器人的 **Orin 大脑本机**运行 `uniubi_media_driver` 的
+**MediaBus 视频后端**，通过本地共享内存获取并直接转发两路 JPEG，不进行二次编码。
+这里的本机指机器人大脑，不是小脑，也不是外部 ARM64 Linux 主机；外部主机使用上述 RTSP 后端。
 
 ```text
 /front_camera_0/image_raw/compressed
@@ -270,10 +271,10 @@ MediaBus 已有的两路 JPEG，不进行二次编码：
 ```
 
 两路均使用 `sensor_msgs/msg/CompressedImage`，`format: jpeg`。通道号只用于区分两路
-前置摄像头，不表示左右位置。驱动使用 best-effort、volatile、depth-1 QoS，并仅在对应
+前置摄像头，不表示左右位置。MediaBus 视频后端使用 best-effort、volatile、depth-1 QoS，并仅在对应
 topic 存在订阅者时启动该路码流。
 
-板端专业感知开发应直接使用 C++/Python SDK 的 MediaBus API，以获得 raw NV12/NV21、
+Orin 大脑本机的专业感知开发可直接使用 C++/Python SDK 的 MediaBus API，以获得 raw NV12/NV21、
 低拷贝 GPU 处理、plane/stride 和完整编码元数据。详见
 [媒体驱动说明](src/uniubi_media_driver/README.zh-CN.md)。
 
@@ -285,7 +286,7 @@ topic 存在订阅者时启动该路码流。
 | 文档 | 面向人群 | 内容 |
 |---|---|---|
 | [README](README.zh-CN.md) | 所有开发者 | 选型、安装和推荐方式快速开始 |
-| [安装 ROS 2 Humble](docs/ros2_install.zh-CN.md) | 首次使用者与板端集成者 | Ubuntu 22.04 软件包、环境加载和验证 |
+| [安装 ROS 2 Humble](docs/ros2_install.zh-CN.md) | 首次使用者与 Orin 大脑集成者 | Ubuntu 22.04 软件包、环境加载和验证 |
 | [ROS 2 使用方式](docs/ros2_usage_modes.zh-CN.md) | 架构设计与高级开发者 | 三种方式的流程、优缺点和选择建议 |
 | [Motion bridge 使用手册](docs/motion_bridge.zh-CN.md) | 普通业务开发者 | `/motion/*`、`/cmd_vel`、状态和观测接口 |
 | [媒体驱动说明](src/uniubi_media_driver/README.zh-CN.md) | ROS 2 摄像头用户 | 两路前置摄像头 JPEG topic、参数、平台约束和 SDK 边界 |

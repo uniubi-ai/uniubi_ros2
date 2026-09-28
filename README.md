@@ -4,7 +4,7 @@
 
 ROS 2 integration for Uniubi robots, including a motion-control bridge, a reusable C++ ROS 2 client, direct DDS / ROS 2 protocol interfaces, and a media driver with MediaBus/RTSP camera backends and PCM audio.
 
-The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The MediaBus backend of `uniubi_media_driver` links the SDK: video uses local shared memory on the aarch64 brain, while PCM capture/playback also supports external x86 and ARM64 hosts. Its optional RTSP video backend can be built without the SDK.
+The original System RPC `.msg` / `.srv` definitions come from [`uniubi_robot_msgs`](https://github.com/uniubi-ai/uniubi_robot_msgs). The ROS 2 package is named `uniubi`, and its interface type prefix is also `uniubi`. Bridge-specific `MotionStatus.msg` and `StartMotionAction.srv` definitions are maintained by `uniubi_motion_bridge`. The three motion-integration modes communicate with `cerebellumServer` or `robotServer`, depending on runtime location, through ROS 2 services and DDS topics without linking `librobotMotionSdk.so`. The MediaBus backend of `uniubi_media_driver` links the SDK: video uses local shared memory on the robot's Orin brain, while PCM capture/playback also supports external x86 and ARM64 hosts. Its optional RTSP video backend can be built without the SDK.
 
 ## Start here
 
@@ -235,8 +235,10 @@ and publish ROS 2 images without the robot SDK or a ROS camera node on the robot
 See its guide for dependencies, launch arguments, timestamps and reconnect behavior. The RTSP path uses CPU decoding; consult the [performance guidance](src/uniubi_media_driver/RTSP.md#intended-use-and-performance-costs) for direct RTSP integration and hardware decoding.
 Avoid running both camera drivers with the same output topic names.
 
-For ordinary ROS 2 applications, run the independent `uniubi_media_driver` locally on the robot's
-aarch64 board. It forwards the two existing MediaBus JPEG streams without re-encoding:
+For ordinary ROS 2 applications, run the **MediaBus video backend** of `uniubi_media_driver`
+on the **robot's Orin brain itself**. It reads local shared memory and forwards the two existing
+JPEG streams without re-encoding. Local here means the robot brain, not the cerebellum or an
+external ARM64 Linux host; external hosts use the RTSP backend described above:
 
 ```text
 /front_camera_0/image_raw/compressed
@@ -244,10 +246,10 @@ aarch64 board. It forwards the two existing MediaBus JPEG streams without re-enc
 ```
 
 Both topics use `sensor_msgs/msg/CompressedImage` with `format: jpeg`. They identify two front-facing
-cameras; channel numbers do not claim a left/right mapping. The driver uses best-effort, volatile,
+cameras; channel numbers do not claim a left/right mapping. The MediaBus video backend uses best-effort, volatile,
 depth-1 QoS and starts a camera stream only when that topic has a subscriber.
 
-Professional on-board perception developers should use the C++ or Python SDK MediaBus API directly
+For professional perception on the robot's Orin brain, developers can use the C++ or Python SDK MediaBus API directly
 for raw NV12/NV21, minimum-copy GPU processing, plane/stride access, and complete codec metadata.
 See the [media driver guide](src/uniubi_media_driver/README.md).
 

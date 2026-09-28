@@ -10,9 +10,11 @@ Uniubi ROS 2 provides one default application-facing motion entry point and two 
 
 Direct protocol integration is one complete approach, not two peer-level alternatives named Direct DDS topics and Direct RPC. Raw data subscriptions and RPC control are channels of the same protocol. See [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the complete contract.
 
-Camera media is intentionally outside these three motion modes. Ordinary ROS 2 camera users run the
-independent board-local [`uniubi_media_driver`](../src/uniubi_media_driver/README.md). Professional
-on-board perception developers use the SDK MediaBus API directly.
+Camera media is outside these three motion modes. The MediaBus video backend of
+[`uniubi_media_driver`](../src/uniubi_media_driver/README.md) runs on the **robot's Orin brain itself**;
+external x86/ARM64 Linux hosts use the [RTSP video backend](../src/uniubi_media_driver/RTSP.md).
+Professional perception on the robot's Orin brain can use the SDK MediaBus API directly. The local
+shared-memory path does not apply to the cerebellum or an external ARM64 host.
 
 ## Comparison
 

@@ -11,11 +11,11 @@ This backend provides standard ROS 2 image topics for quick integration, functio
 | Quickly obtain standard ROS image topics | Use this backend; enable JPEG only when needed |
 | Only view or archive video | Use an RTSP client directly; when the tool and container support it, archive the encoded stream without decoding or re-encoding |
 | Low latency, high frame rates, many streams, or GPU perception | Consume RTSP directly and configure decoding, buffering, and processing for the target platform |
-| On-brain SDK raw images or GPU data access | Consider the MediaBus SDK to avoid unnecessary CPU image conversion |
+| SDK raw images or GPU data access on the robot's Orin brain | Consider the MediaBus SDK to avoid unnecessary CPU image conversion |
 
 The current implementation uses FFmpeg **CPU software decoding**, converts frames into BGR8 in CPU memory, and publishes ROS messages. It does not configure a hardware decoder device or a GPU zero-copy path. Having a hardware decoder does not make this node use it automatically. Decoding, color conversion, memory copies, and ROS message transport all have costs. Two 1280x720 BGR8 streams at 25 fps contain approximately **138 MB/s** of raw image data; this is neither the encoded RTSP bitrate nor a measurement of actual network traffic or total memory bandwidth consumption.
 
-Enabling `publish_compressed` re-encodes decoded images as JPEG, adding CPU work and latency; it is disabled by default. The local MediaBus backend forwards existing JPEG frames without this RTSP decode/re-encode pipeline. Building both backends adds dependencies and artifacts; an unstarted backend performs no video processing.
+Enabling `publish_compressed` re-encodes decoded images as JPEG, adding CPU work and latency; it is disabled by default. The MediaBus backend on the robot's Orin brain forwards existing JPEG frames without this RTSP decode/re-encode pipeline. Building both backends adds dependencies and artifacts; an unstarted backend performs no video processing.
 
 For performance-sensitive applications, consider direct RTSP integration through FFmpeg, GStreamer, or the platform media interfaces. Where hardware decoding is available, verify support for the source codec, resolution, driver, and tool build, and explicitly configure the matching hardware decoding path. GPU perception pipelines should retain decoded frames in device memory where possible instead of downloading to the CPU and uploading again. If the application still needs CPU BGR8 ROS images, conversion, copying, and message transport costs remain after hardware decoding. Hardware decoding alone does not guarantee lower end-to-end latency.
 

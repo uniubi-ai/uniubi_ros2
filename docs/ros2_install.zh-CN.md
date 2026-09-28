@@ -2,8 +2,9 @@
 
 [English](ros2_install.md) | **简体中文**
 
-本仓库面向 Ubuntu 22.04（Jammy）上的 ROS 2 Humble。机器人 aarch64 Orin 板端和
-x86_64 Ubuntu 开发机均可使用对应架构的 Debian 软件包。
+本仓库面向 Ubuntu 22.04（Jammy）上的 ROS 2 Humble。机器人 **Orin 大脑本机**与
+外部 x86_64/ARM64 Linux 主机均可使用对应架构的 Debian 软件包。这里的 Orin 大脑本机
+不包括机器人小脑；外部 ARM64 主机也不因 CPU 架构相同而成为机器人大脑。
 
 ## 1. 配置 ROS 2 软件源
 
@@ -11,9 +12,10 @@ x86_64 Ubuntu 开发机均可使用对应架构的 Debian 软件包。
 启用 Ubuntu Universe 仓库，并安装当前版本的 ROS 2 APT source package。不要从其他
 机器人复制可能已经过期的签名密钥或软件源快照。
 
-## 2. 安装板端/开发环境
+## 2. 安装 Orin 大脑或外部主机的开发环境
 
-以下轻量包组合足以构建和运行本仓库，无需安装桌面 GUI：
+以下为 ROS 2 基础开发环境，无需安装桌面 GUI。默认构建媒体包还需要机器人 SDK 和
+FFmpeg 开发库，见[媒体驱动构建说明](../src/uniubi_media_driver/README.zh-CN.md#构建和运行)：
 
 ```bash
 sudo apt update
@@ -29,7 +31,7 @@ sudo apt install -y \
   build-essential cmake git
 ```
 
-`ros-humble-desktop` 是可选项。只有开发机需要 RViz、rqt 等 GUI 工具时才安装；板端
+`ros-humble-desktop` 是可选项。只有开发机需要 RViz、rqt 等 GUI 工具时才安装；Orin 大脑本机或外部主机上的
 运动节点和媒体节点都不依赖它。
 
 ## 3. 加载并验证环境

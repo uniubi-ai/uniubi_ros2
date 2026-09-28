@@ -17,9 +17,10 @@
 
 ## ROS 2 摄像头开发者
 
-阅读 [`uniubi_media_driver` 说明](../src/uniubi_media_driver/README.zh-CN.md)。媒体驱动是独立的
-板端本地包，不属于 Motion bridge；它为普通 ROS 2 应用提供便捷的 JPEG topic。板端感知和
-低拷贝流水线应直接使用 SDK MediaBus API。
+阅读 [`uniubi_media_driver` 说明](../src/uniubi_media_driver/README.zh-CN.md)。媒体驱动独立于
+Motion bridge：MediaBus 视频后端在机器人的 **Orin 大脑本机**通过共享内存转发 JPEG；
+外部 x86/ARM64 Linux 主机使用 [RTSP 视频后端](../src/uniubi_media_driver/RTSP.zh-CN.md)。
+“大脑本机”不包括小脑或外部 ARM64 主机。大脑本机的专业感知和低拷贝流水线可直接使用 SDK MediaBus API。
 
 ## 需要自定义控制流程的 C++ 开发者
 

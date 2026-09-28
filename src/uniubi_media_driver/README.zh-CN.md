@@ -25,8 +25,11 @@ MediaBus 编码帧订阅。QoS 使用传感器数据风格：best effort、volat
 外部主机通过 RTSP 接入视频时，请选择本包的 [RTSP 后端](RTSP.zh-CN.md)，
 可不依赖机器人 SDK 构建。下述本机限制仅适用于 MediaBus 视频后端。
 
-视频必须运行在机器人本机 aarch64 板端，使用本地共享内存。音频也支持外部 x86 和
-ARM64 host，见[音频指南](AUDIO.zh-CN.md)。本机模式下，进程必须有权访问 `/tmp/roudi` 和 MediaBus 共享内存资源。生产部署
+**MediaBus 视频后端必须运行在机器人的 Orin 大脑本机**，通过同一台设备的共享内存获取图像。
+这里不包括小脑或外部 ARM64 Linux 主机；外部主机即使同为 aarch64 架构，
+也不能访问机器人大脑的本地共享内存，应使用 RTSP 视频后端。平台角色由部署位置决定，
+不能只根据 CPU 架构判断。音频则支持 Orin 大脑本机和外部 x86/ARM64 Linux 主机，
+见[音频指南](AUDIO.zh-CN.md)。大脑本机模式下，进程必须有权访问 `/tmp/roudi` 和 MediaBus 共享内存资源。生产部署
 应配置合适的服务账号、用户组或 ACL，不应仅为绕过权限问题而让整个应用长期以 root 运行。
 
 ## 构建和运行
@@ -54,14 +57,14 @@ export LD_LIBRARY_PATH="$HOME/uniubi_robot_sdk_install/lib/aarch64:${LD_LIBRARY_
 ros2 launch uniubi_media_driver media_driver.launch.py
 ```
 
-构建后，视频启动时选择来源；上述默认命令启动本机 MediaBus，远程 RTSP 使用：
+构建后，视频启动时选择来源；上述默认命令在 Orin 大脑本机启动 MediaBus，远程 RTSP 使用：
 
 ```bash
 ros2 launch uniubi_media_driver media_driver.launch.py \
   video_backend:=rtsp host:=192.168.1.10
 ```
 
-普通 ARM64 外部主机安装 SDK 时使用 `-DPLATFORM=aarch64_host`；SDK 库目录随部署选择 `aarch64`（大脑）、`x86_64` 或 `aarch64_host`。精简构建和旧缓存处理见 [RTSP 说明](RTSP.zh-CN.md)。
+普通 ARM64 外部主机安装 SDK 时使用 `-DPLATFORM=aarch64_host`；SDK 库目录随部署选择 `aarch64`（Orin 大脑本机）、`x86_64` 或 `aarch64_host`。精简构建和旧缓存处理见 [RTSP 说明](RTSP.zh-CN.md)。
 
 检查一路图像：
 
@@ -74,9 +77,9 @@ ros2 topic hz /front_camera_0/image_raw/compressed \
 
 ## 何时直接使用 SDK
 
-该包面向需要 ROS 2 图像、远程显示或录制 JPEG 的普通开发者。板端感知、raw
+该包面向需要 ROS 2 图像、远程显示或录制 JPEG 的普通开发者。Orin 大脑本机感知、raw
 NV12/NV21、低拷贝 GPU 流水线、精确 plane/stride 处理或完整编码元数据等
 专业场景，应直接使用 C++/Python SDK 的 MediaBus API。
 
 > ROS 2 媒体驱动面向通用开发和快速集成，并不替代完整 MediaBus SDK。原始图像
-> 及专业板端感知场景建议直接集成 SDK。
+> 及专业 Orin 大脑本机感知场景建议直接集成 SDK。

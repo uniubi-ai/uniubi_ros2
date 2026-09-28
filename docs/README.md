@@ -17,10 +17,12 @@ Typical application nodes do not need to call `uniubi/srv/System` directly or un
 
 ## ROS 2 camera users
 
-Read the [`uniubi_media_driver` guide](../src/uniubi_media_driver/README.md). The media driver is an
-independent board-local package rather than part of the Motion bridge. It provides convenient JPEG
-topics for ordinary ROS 2 applications. On-board perception and minimum-copy pipelines should use the
-SDK MediaBus API directly.
+Read the [`uniubi_media_driver` guide](../src/uniubi_media_driver/README.md). The media driver is
+independent of the Motion bridge. Its MediaBus video backend forwards shared-memory JPEG frames
+on the **robot's Orin brain itself**; external x86/ARM64 Linux hosts use the
+[RTSP video backend](../src/uniubi_media_driver/RTSP.md). The robot brain does not mean the
+cerebellum or an external ARM64 host. Professional perception and minimum-copy pipelines on the
+robot's Orin brain can use the SDK MediaBus API directly.
 
 ## C++ developers with custom control flows
 

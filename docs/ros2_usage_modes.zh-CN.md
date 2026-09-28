@@ -13,9 +13,10 @@ Uniubi ROS 2 提供一个默认运动业务入口和两个按需使用的高级�
 其中原始数据订阅和 RPC 控制只是同一套协议中的不同通道，完整契约见
 [`uniubi_robot_dds_api.zh-CN.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.zh-CN.md)。
 
-摄像头媒体不属于这三种运动接入方式。普通 ROS 2 摄像头用户运行独立的板端本地
-[`uniubi_media_driver`](../src/uniubi_media_driver/README.zh-CN.md)；板端专业感知开发者直接
-使用 SDK MediaBus API。
+摄像头媒体不属于这三种运动接入方式。[`uniubi_media_driver`](../src/uniubi_media_driver/README.zh-CN.md)
+的 MediaBus 视频后端运行在机器人的 **Orin 大脑本机**；外部 x86/ARM64 Linux 主机使用
+[RTSP 视频后端](../src/uniubi_media_driver/RTSP.zh-CN.md)。大脑本机的专业感知开发可直接使用
+SDK MediaBus API。这里的本机共享内存路径不适用于小脑或外部 ARM64 主机。
 
 ## 选型对比
 

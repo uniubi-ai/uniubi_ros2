@@ -2,9 +2,10 @@
 
 **English** | [简体中文](ros2_install.zh-CN.md)
 
-This repository targets ROS 2 Humble on Ubuntu 22.04 (Jammy). The same Debian
-packages are available for the robot's aarch64 Orin board and x86_64 Ubuntu
-development machines.
+This repository targets ROS 2 Humble on Ubuntu 22.04 (Jammy). Architecture-matched Debian
+packages can be used on the **robot's Orin brain itself** and external x86_64/ARM64 Linux hosts.
+The robot brain does not mean the cerebellum; an external ARM64 host is not the robot brain
+merely because it shares the CPU architecture.
 
 ## 1. Configure the ROS 2 package source
 
@@ -13,10 +14,11 @@ to enable the Ubuntu Universe repository and install the current ROS 2 APT
 source package. Use the official procedure rather than copying an old signing
 key or repository snapshot from another robot.
 
-## 2. Install the board/development environment
+## 2. Install the Orin brain or external-host development environment
 
-The following lightweight package set is sufficient to build and run the
-packages in this repository without desktop GUI tools:
+The following packages provide the base ROS 2 development environment without desktop GUI tools.
+The default media package build also needs the robot SDK and FFmpeg development libraries;
+see the [media driver build guide](../src/uniubi_media_driver/README.md#build-and-run):
 
 ```bash
 sudo apt update
@@ -33,8 +35,8 @@ sudo apt install -y \
 ```
 
 `ros-humble-desktop` is optional. Install it on a development machine only when
-RViz, rqt, and other GUI tools are required; it is not required by the on-board
-motion or media nodes.
+RViz, rqt, and other GUI tools are required; it is not required by motion or media nodes
+on the robot's Orin brain or external hosts.
 
 ## 3. Source and verify
 
