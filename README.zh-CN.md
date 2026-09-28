@@ -150,13 +150,9 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### 在远程 PC/开发主机上运行
 
-**网线直连：** 先按[连接外设：外部主机直连机器人小脑](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.zh-CN.md#22-外部主机开发板--pc直连机器人小脑)配置主机静态 IP 和 DHCP，为机器人网口分配地址。
-用 `ip -br addr` 确认主机的实际有线网卡，然后使用下面的直连 `CYCLONEDDS_URI` 配置；
-外部 Orin 开发板同样使用实际有线网卡，不照抄机器人大脑内部的 `eth0.100`。
+用 `ip -br addr` 确认主机实际连接机器人网络的网卡，并填写 `CYCLONEDDS_URI`。根据连接方式选择以下一个示例运行。
 
-直连示例启用 `<DontRoute>true</DontRoute>`，用于限制 DDS 使用直连网段的地址，
-避免机器人同时开启 Wi-Fi 时选中主机不可达的地址；它适用于同一二层/同网段，不适用于跨路由通信。
-更多说明见 [Motion bridge 文档](docs/motion_bridge.zh-CN.md)。
+#### 常规网络配置
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -167,8 +163,27 @@ export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 # 将接口名替换为远程主机上实际连接机器人网络的网卡
 export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
-# 网线直连时，将上一条 CYCLONEDDS_URI 替换为下面这条（取消注释并填写实际有线网卡）：
-# export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
+export ROBOT_DEVICE_ID='<deviceNo>'
+
+ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
+  device_id:="$ROBOT_DEVICE_ID"
+```
+
+#### 外设与机器狗网线直连（可选）
+
+**如果外设（开发板 / PC）通过网线与机器狗直接连接，或经交换机连接到同一网段**，使用以下完整示例。主机静态 IP 和 DHCP 配置可参考[连接外设：外部主机直连机器人小脑](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.zh-CN.md#22-外部主机开发板--pc直连机器人小脑)。
+
+此示例已启用 `<DontRoute>true</DontRoute>`：机器人 Wi-Fi 同时开启时须启用，避免 DDS 选中外设不可达的 Wi-Fi 地址；Wi-Fi 未开启时也可使用此配置。该设置不适用于跨路由通信。将 `REPLACE_WITH_WIRED_NIC` 和 `<deviceNo>` 替换为实际有线网卡名和目标机器人 SN。
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+# 将接口名替换为外设连接机器狗的实际有线网卡
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_WIRED_NIC"/></Interfaces><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
