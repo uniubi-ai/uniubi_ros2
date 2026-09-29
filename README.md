@@ -14,11 +14,11 @@ The repository provides one default application-facing entry point and two advan
 |---|---|---|---|---|
 | Motion bridge | Typical ROS 2 application nodes | The bridge acquires, renews, and releases control automatically | `/motion/*`, `/cmd_vel`, standard sensor topics | Recommended |
 | `uniubi_motion_client` | C++ developers who need more high-level motion capabilities | The application explicitly calls `connect/startControl/releaseControl` | C++ methods and callbacks | Advanced |
-| Direct DDS / ROS 2 protocol | Raw data, protocol maintenance, and cross-framework integration | Not required for read-only data; control lifecycle is application-managed | RPC, Event, raw topics, TRC | Protocol-level |
+| Direct DDS / ROS 2 protocol | Raw data, protocol maintenance, and cross-framework integration | Not required for read-only data; control lifecycle is application-managed | RPC, Event, observation topics, action RPC | Protocol-level |
 
 See [ROS 2 integration modes](docs/ros2_usage_modes.md) for a complete comparison and selection guide.
 
-Direct DDS / ROS 2 protocol integration is one complete low-level approach containing RPC, Event, data topics, the control-ownership lifecycle, and TRC. It is not two separate alternatives named “Direct DDS” and “Direct RPC.” See the [Direct DDS / ROS 2 API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the protocol contract.
+Direct DDS / ROS 2 protocol integration is one complete low-level approach containing RPC, Event, observation topics, and the control-ownership lifecycle for action RPCs. It is not two separate alternatives named “Direct DDS” and “Direct RPC.” See the [Direct DDS / ROS 2 API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the protocol contract.
 
 > **Feature scope:** The Motion bridge focuses on common motion control and selectively exposes standard ROS 2 observation interfaces for odometry, joints, IMU, and battery data. It is not a complete ROS 2 mapping of the High Level Client or the low-level DDS / ROS 2 protocol. Camera frames are intentionally provided by the independent `uniubi_media_driver`, not by the Motion bridge.
 

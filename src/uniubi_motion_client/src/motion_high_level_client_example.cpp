@@ -17,7 +17,7 @@
  * 2. 调用 connect() 初始化客户端并订阅 robotServer 事件，此时还不会获取控制权。
  * 3. 先执行只读查询接口，用于在取控制权前确认基础 RPC 链路是否正常。
  * 4. 调用 startControl() 获取高级运动控制权；MotionHighLevelClient 内部会启动租约续约。
- * 5. 依次测试动作、原始 TRC、音频和运动数据记录接口。
+ * 5. 依次测试动作、音频和运动数据记录接口。
  * 6. 测试结束时调用 releaseControl() 和 disconnect() 收尾。
  *
  * 该程序可能控制真实机器人，因此没有注册为 ament 自动测试。
@@ -143,19 +143,8 @@ public:
         std::cout << "stopAction failed: err=" << client_->getLastError() << std::endl;
       }
       spin_for(200ms);
-
-      // 原始 TRC 控制使用 takeMotionControl() 返回的 rawActionId，而不是字符串 controller token。
-      // 如果服务端没有下发 rawActionId，MotionHighLevelClient 会返回 kActionRejected。
-      MotionHighLevelClient::TRCStickFrame frame;
-      frame.valid = 1;
-      frame.buttons[MotionHighLevelClient::buttonBack] = 1;  // Stand
-      frame.buttons[MotionHighLevelClient::buttonA] = 1;  // Stand + A = Lie Down（内部动作 laying）
-      if (!client_->setRawControlCmd(frame)) {
-        std::cout << "setRawControlCmd skipped/failed: err=" << client_->getLastError() << std::endl;
-      }
-      spin_for(200ms);
     } else {
-      std::cout << "motion action demo skipped; set kEnableMotionActionDemo=true for walking/TRC debug"
+      std::cout << "motion action demo skipped; set kEnableMotionActionDemo=true for walking action debug"
                 << std::endl;
     }
 

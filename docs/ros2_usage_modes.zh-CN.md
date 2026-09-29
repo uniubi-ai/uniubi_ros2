@@ -7,7 +7,7 @@ Uniubi ROS 2 提供一个默认运动业务入口和两个按需使用的高级�
 
 - Motion bridge：常用运动控制和部分标准 ROS 2 观测接口。
 - `uniubi_motion_client`：自定义 C++ 高级运控流程。
-- DDS / ROS 2 协议直连：直接处理 RPC、Event、数据 topic 和 TRC。
+- DDS / ROS 2 协议直连：直接处理 RPC、Event 和观测 topic。
 
 协议直连是一种完整接入方式，不再把 Direct DDS topic 和 Direct RPC 列成两个平级方案。
 其中原始数据订阅和 RPC 控制只是同一套协议中的不同通道，完整契约见
@@ -91,7 +91,7 @@ bridge 是唯一的高级运控客户端，内部完成连接、按需取权、�
 
 优点：
 
-- 可以使用比 bridge 更完整的高级运控、系统、音频和原始 TRC 接口。
+- 可以使用比 bridge 更完整的高级运控、系统和音频接口。
 - 复用统一的 RPC 构造、响应匹配、Event 解析和续约逻辑。
 - 适合把高级能力嵌入一个受控的 C++ 进程。
 
@@ -139,10 +139,9 @@ ros2 run uniubi_motion_client motion_high_level_client_example
 RPC 请求/响应       查询、配置、控制权和动作控制
 Event               设备主动推送的状态变化
 数据 topic           motion observed、sensor observed
-TRC 控制 topic       高频实时控制帧
 ```
 
-只读取某个原始 topic 时可以仅使用所需的数据通道；一旦进行动作或 TRC 控制，就必须同时正确
+只读取某个原始 topic 时可以仅使用所需的数据通道；一旦进行动作控制，就必须同时正确
 实现 RPC 控制权生命周期和 Event 处理。普通业务不应把其中一个通道当作另一套独立接入方式。
 
 ### 原始数据 topic
@@ -170,8 +169,7 @@ TRC 控制 topic       高频实时控制帧
 - 调用方需要正确设置 reliability、history depth 和 durability。
 - 原始时间戳、坐标和字段语义需要按协议解释。
 
-`/motion/trc` 是控制 topic，不属于普通只读数据流。直接发布 TRC 需要已有控制会话、正确的
-控制 ID 和持续发送约束；普通业务应使用 bridge 或 client。
+动作和步态控制可使用 bridge 的运动 service 与速度 topic，或在 C++ client 中调用 `MotionHighLevelClient::startAction`、`setActionParams`。这两条路径均不发布原始手柄按键或摇杆帧。
 
 ### RPC、Event 和控制
 
@@ -182,7 +180,7 @@ TRC 控制 topic       高频实时控制帧
 
 ```text
 takeMotionControl
-→ 保存 controller/lease/rawActionId
+→ 保存 controller/lease
 → renewMotionControl
 → 解析控制状态 Event
 → 控制调用

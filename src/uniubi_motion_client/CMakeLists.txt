@@ -85,8 +85,10 @@ if(BUILD_TESTING)
   target_link_libraries(cere_sensor_reader_test motion_high_level_client CycloneDDS::ddsc)
   ament_target_dependencies(cere_sensor_reader_test rclcpp uniubi)
   add_test(NAME cere_sensor_reader_test COMMAND cere_sensor_reader_test)
+  # Explicit lo binding isolates the test; ROS_LOCALHOST_ONLY=1 would add lo again
+  # in Humble rmw_cyclonedds_cpp with CycloneDDS 0.10.x.
   set_tests_properties(cere_sensor_reader_test PROPERTIES TIMEOUT 20
-    ENVIRONMENT "ROS_DOMAIN_ID=173;ROS_LOCALHOST_ONLY=1;CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name='lo'/></Interfaces><AllowMulticast>false</AllowMulticast></General></Domain></CycloneDDS>")
+    ENVIRONMENT "ROS_DOMAIN_ID=173;ROS_LOCALHOST_ONLY=0;CYCLONEDDS_URI=<CycloneDDS><Domain><General><Interfaces><NetworkInterface name='lo'/></Interfaces><AllowMulticast>false</AllowMulticast></General></Domain></CycloneDDS>")
 endif()
 
 ament_package()

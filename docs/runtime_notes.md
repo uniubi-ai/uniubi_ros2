@@ -6,7 +6,7 @@ This document records ROS 2 integration behaviors that commonly cause mistakes w
 
 ## Direct DDS / ROS 2 protocol
 
-Direct protocol integration includes RPC, Event, raw data topics, and TRC. The sections below describe each channel's runtime boundary; they do not define “Direct DDS” and “Direct RPC” as separate peer-level integration modes.
+Direct protocol integration includes RPC, Event, and raw observation topics. The sections below describe each channel's runtime boundary; they do not define “Direct DDS” and “Direct RPC” as separate peer-level integration modes.
 
 ### Raw data topics
 
@@ -14,7 +14,6 @@ Continuous raw data is available through DDS/ROS 2 topics:
 
 - Motion observation: `/motion/observed`
 - Sensor observation: `/sensor/observed` (GPS, UWB, and Walk odometry)
-- Raw control: `/motion/trc` (not an ordinary read-only stream)
 
 Subscribing to observation topics does not require High Level control ownership. `/motion/observed` and `/sensor/observed` are disabled by default. Direct-protocol clients must create the reader first and then call the control-free `setMotionObservedEnable()` RPC. The Motion bridge manages raw observation streams automatically; its application nodes only subscribe to the standard ROS 2 topics published by the bridge. In the current bridge implementation, the enable RPC completes before the raw subscriptions are created, so the first observation frames may be lost; direct-protocol clients should continue to follow the reader-first protocol order. A successful raw-topic test proves only that the message type, DDS discovery, and QoS path work.
 
@@ -110,4 +109,4 @@ Recommended shutdown sequence for motion tests:
 
 ## Safety gate
 
-Require explicit operator confirmation before high-risk movement on real hardware. Treat walking with velocity parameters, `move`, `bipedStand`, `handstand`, `waveBody`, and `jump*` as high-risk actions. Emergency stop, all-zero TRC frames, audio play/pause/stop, audio add/remove, and light settings are not high-risk motion actions, but their interface ownership and parameter requirements still apply.
+Require explicit operator confirmation before high-risk movement on real hardware. Treat walking with velocity parameters, `move`, `bipedStand`, `handstand`, `waveBody`, and `jump*` as high-risk actions. Emergency stop, audio play/pause/stop, audio add/remove, and light settings are not high-risk motion actions, but their interface ownership and parameter requirements still apply.

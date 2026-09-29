@@ -22,13 +22,13 @@ robotServer 原始 `.msg` / `.srv` 定义统一来自
 |---|---|---|---|---|
 | Motion bridge | 普通 ROS 2 业务节点 | bridge 自动取权、续约和释放 | `/motion/*`、`/cmd_vel`、标准传感器 topic | 推荐 |
 | `uniubi_motion_client` | 需要更多高级运控能力的 C++ 开发者 |应用显式调用 `connect/startControl/releaseControl` | C++ 方法和回调 | 高级 |
-| DDS / ROS 2 协议直连 | 原始数据、协议维护和跨框架接入 | 只读数据不需要；控制流程自行管理 | RPC、Event、原始 topic、TRC | 协议级 |
+| DDS / ROS 2 协议直连 | 原始数据、协议维护和跨框架接入 | 只读数据不需要；控制流程自行管理 | RPC、Event、观测 topic、动作 RPC | 协议级 |
 
 三种方式的完整优缺点和选型说明见
 [`docs/ros2_usage_modes.zh-CN.md`](docs/ros2_usage_modes.zh-CN.md)。
 
 DDS / ROS 2 协议直连是一种完整的底层接入方式，同时包含 RPC、Event、数据 topic、控制权
-生命周期和 TRC；不是“Direct DDS”和“Direct RPC”两种并列方案。协议契约见
+生命周期及动作 RPC；不是“Direct DDS”和“Direct RPC”两种并列方案。协议契约见
 [DDS / ROS 2 直连接入 API](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.zh-CN.md)。
 
 > **功能范围：** Motion bridge 当前以常用运动控制为主，并选择性提供里程计、关节、IMU、

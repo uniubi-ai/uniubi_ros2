@@ -6,7 +6,7 @@
 
 ## DDS / ROS 2 协议直连
 
-协议直连同时包含 RPC、Event、原始数据 topic 和 TRC。以下小节按通道说明运行边界，不代表
+协议直连包含 RPC、Event 和原始观测 topic。以下小节按通道说明运行边界，不代表
 Direct DDS 和 Direct RPC 是两种平级接入方式。
 
 ### 原始数据 topic
@@ -15,7 +15,6 @@ Direct DDS 和 Direct RPC 是两种平级接入方式。
 
 - Motion observation topic：`/motion/observed`
 - Sensor observation topic：`/sensor/observed`（GPS、UWB、Walk 里程计）
-- 原始控制 topic：`/motion/trc`（不是普通只读数据流）
 
 订阅这些观测 topic 不要求持有 High Level 控制权。`/motion/observed` 和
 `/sensor/observed` 默认关闭，协议直连使用者必须先建立 reader，
@@ -134,4 +133,4 @@ ROS 2/RMW 使用 service request header 将响应关联到对应请求。当前�
 
 ## 安全门控
 
-真实机器人上应将高风险运动放在明确的人工确认之后。带速度参数的 walking、`move`、`bipedStand`、`handstand`、`waveBody` 和 `jump*` 都按高风险动作处理。急停、TRC 全零帧、音频播放 / 暂停 / 停止、音频增删和灯光设置不属于高风险运动动作，但仍需要满足接口持权和参数要求。
+真实机器人上应将高风险运动放在明确的人工确认之后。带速度参数的 walking、`move`、`bipedStand`、`handstand`、`waveBody` 和 `jump*` 都按高风险动作处理。急停、音频播放 / 暂停 / 停止、音频增删和灯光设置不属于高风险运动动作，但仍需要满足接口持权和参数要求。

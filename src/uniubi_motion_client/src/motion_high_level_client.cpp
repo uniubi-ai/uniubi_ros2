@@ -17,7 +17,6 @@ namespace
 {
 
 constexpr const char * kRobotAppService = "robotAppService";
-constexpr const char * kRawControlTopic = "motion/trc";
 constexpr const char * kHostEventTopic = "robotServer.host.event";
 constexpr const char * kControlStatusTopic = "robotServer.control.status";
 constexpr std::uint32_t kEventMagic = 0x53425645U;
@@ -99,8 +98,6 @@ MotionHighLevelClient::MotionHighLevelClient(
   sensor_observed_source_(sensor_observed_source),
   cere_motion_topic_(cere_motion_topic),
   motion_observed_topic_(motion_observed_topic),
-  raw_action_id_(0),
-  raw_control_seq_(1),
   lease_ms_(kDefaultLeaseMs),
   state_(kDisconnected),
   last_error_(kNone)
@@ -133,8 +130,6 @@ bool MotionHighLevelClient::connect(int32_t lease_ms)
 
   lease_ms_ = lease_ms > 0 ? lease_ms : kDefaultLeaseMs;
   controller_.clear();
-  raw_action_id_ = 0;
-  raw_control_seq_ = 1;
   create_event_subscription();
   set_error(kNone);
   state_ = kConnected;
@@ -151,9 +146,7 @@ void MotionHighLevelClient::disconnect()
   destroy_event_subscription();
   destroy_sensor_observed_subscription();
   destroy_motion_observed_subscription();
-  raw_control_publisher_.reset();
   controller_.clear();
-  raw_action_id_ = 0;
   state_ = kDisconnected;
 }
 
@@ -251,9 +244,6 @@ bool MotionHighLevelClient::startControl(int32_t timeout_ms)
   if (ret.isMember("leaseTimeout") && ret["leaseTimeout"].isNumeric()) {
     lease_ms_ = ret["leaseTimeout"].asInt();
   }
-  raw_action_id_ =
-    ret.isMember("rawActionId") && ret["rawActionId"].isNumeric() ? ret["rawActionId"].asUInt64() : 0;
-  raw_control_seq_ = 1;
   mark_control_activity();
   state_ = kControlled;
   set_error(kNone);
@@ -284,7 +274,6 @@ bool MotionHighLevelClient::releaseControl()
 
   stop_renew_timer();
   controller_.clear();
-  raw_action_id_ = 0;
   state_ = kConnected;
   set_error(kNone);
 
@@ -476,54 +465,6 @@ bool MotionHighLevelClient::setActionParams(
     mark_control_activity();
   }
   return success;
-}
-
-bool MotionHighLevelClient::setRawControlCmd(const TRCStickFrame & frame)
-{
-  if (!ensure_controlled()) {
-    return false;
-  }
-
-  if (raw_action_id_ == 0) {
-    set_error(kActionRejected);
-    return false;
-  }
-
-  if (!raw_control_publisher_) {
-    raw_control_publisher_ = node_->create_publisher<RemoteControl>(kRawControlTopic, rclcpp::QoS(1));
-  }
-
-  RemoteControl message;
-  message.controller = raw_action_id_;
-  message.timestamp = raw_control_seq_++;
-  if (frame.valid) {
-    message.back = frame.buttons[buttonBack];
-    message.start = frame.buttons[buttonStart];
-    message.lb = frame.buttons[buttonLB];
-    message.rb = frame.buttons[buttonRB];
-    message.f1 = frame.buttons[buttonF1];
-    message.f2 = frame.buttons[buttonF2];
-    message.a = frame.buttons[buttonA];
-    message.b = frame.buttons[buttonB];
-    message.x = frame.buttons[buttonX];
-    message.y = frame.buttons[buttonY];
-    message.up = frame.buttons[buttonUp];
-    message.down = frame.buttons[buttonDown];
-    message.left = frame.buttons[buttonLeft];
-    message.right = frame.buttons[buttonRight];
-    message.ls = frame.buttons[buttonLS];
-    message.rs = frame.buttons[buttonRS];
-    message.stick_lx = frame.axes[axesLX];
-    message.stick_ly = frame.axes[axesLY];
-    message.stick_rx = frame.axes[axesRX];
-    message.stick_ry = frame.axes[axesRY];
-    message.trigger_l = frame.axes[axesLT];
-    message.trigger_r = frame.axes[axesRT];
-  }
-
-  raw_control_publisher_->publish(message);
-  set_error(kNone);
-  return true;
 }
 
 bool MotionHighLevelClient::emergencyStop(int32_t timeout_ms)
@@ -996,7 +937,6 @@ void MotionHighLevelClient::lose_control(HighLevelError error)
 {
   stop_renew_timer();
   controller_.clear();
-  raw_action_id_ = 0;
   state_ = kConnected;
   set_error(error);
   if (connect_callback_) {

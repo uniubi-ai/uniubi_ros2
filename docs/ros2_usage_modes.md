@@ -6,7 +6,7 @@ Uniubi ROS 2 provides one default application-facing motion entry point and two 
 
 - Motion bridge: common motion control and selected standard ROS 2 observation interfaces.
 - `uniubi_motion_client`: custom C++ High Level motion-control flows.
-- Direct DDS / ROS 2 protocol: direct RPC, Event, data-topic, and TRC integration.
+- Direct DDS / ROS 2 protocol: direct RPC, Event, and observation-topic integration.
 
 Direct protocol integration is one complete approach, not two peer-level alternatives named Direct DDS topics and Direct RPC. Raw data subscriptions and RPC control are channels of the same protocol. See [`uniubi_robot_dds_api.md`](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/uniubi_robot_dds_api.md) for the complete contract.
 
@@ -85,7 +85,7 @@ For the direct `uniubi_motion_client` path, `releaseControl()` and `disconnect()
 
 Advantages:
 
-- Exposes more complete High Level motion, system, audio, and raw TRC interfaces than the bridge.
+- Exposes more complete High Level motion, system, and audio interfaces than the bridge.
 - Reuses common RPC construction, response matching, Event parsing, and lease-renewal logic.
 - Suitable for embedding advanced capabilities in one controlled C++ process.
 
@@ -131,10 +131,9 @@ This mode bypasses the application wrappers in the bridge and `uniubi_motion_cli
 RPC requests/responses   queries, configuration, control ownership, and action control
 Event                    device-initiated state changes
 data topics              motion observed, sensor observed
-TRC control topic        high-rate real-time control frames
 ```
 
-A read-only application may use only the required raw data channel. Once it performs action or TRC control, it must also implement the RPC control-ownership lifecycle and Event handling correctly. Typical applications must not treat one channel as an independent alternative to the protocol as a whole.
+A read-only application may use only the required raw data channel. Once it performs action control, it must also implement the RPC control-ownership lifecycle and Event handling correctly. Typical applications must not treat one channel as an independent alternative to the protocol as a whole.
 
 ### Raw data topics
 
@@ -159,7 +158,7 @@ Trade-offs:
 - Callers must configure reliability, history depth, and durability correctly.
 - Raw timestamps, coordinates, and field semantics must be interpreted according to the protocol.
 
-`/motion/trc` is a control topic, not an ordinary read-only stream. Publishing TRC directly requires an existing control session, a correct control ID, and continuous transmission. Typical applications should use the bridge or client instead.
+For action and gait control, use the bridge's motion services and velocity topic, or call `MotionHighLevelClient::startAction` and `setActionParams` in a C++ client. Neither path publishes raw controller button or axis frames.
 
 ### RPC, Event, and control
 
@@ -169,7 +168,7 @@ Read-only RPCs require no control ownership. For control RPCs, the caller must i
 
 ```text
 takeMotionControl
-→ retain controller/lease/rawActionId
+→ retain controller/lease
 → renewMotionControl
 → parse control-status events
 → make control calls

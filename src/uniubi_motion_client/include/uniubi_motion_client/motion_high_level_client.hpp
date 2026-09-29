@@ -12,7 +12,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "uniubi/msg/event_message.hpp"
 #include "uniubi/msg/motion_observed.hpp"
-#include "uniubi/msg/remote_control.hpp"
 #include "uniubi/msg/sensor_observed.hpp"
 #include "uniubi_motion_client/cere_sensor_reader.hpp"
 #include "uniubi_motion_client/system_rpc_client_base.hpp"
@@ -57,49 +56,6 @@ public:
     kNotConnected,         ///< 未 connect() 时调用了需要连接态的接口。
     kNotControlled,        ///< 未持有控制权时调用了控制类接口。
     kActionRejected,       ///< 服务端返回 result=false 或参数不合法。
-  };
-
-  /// 原始 TRC 控制帧中的按键索引。
-  enum ButtonDefine
-  {
-    buttonBack = 0,
-    buttonStart,
-    buttonLB,
-    buttonRB,
-    buttonF1,
-    buttonF2,
-    buttonA,
-    buttonB,
-    buttonX,
-    buttonY,
-    buttonUp,
-    buttonDown,
-    buttonLeft,
-    buttonRight,
-    buttonLS,
-    buttonRS,
-    BUTTON_MAX,
-  };
-
-  /// 原始 TRC 控制帧中的摇杆/扳机索引。
-  enum AxesDefine
-  {
-    axesLX = 0,
-    axesLY,
-    axesRX,
-    axesRY,
-    axesLT,
-    axesRT,
-    AXES_MAX,
-  };
-
-  /// 原始 TRC 控制帧。setRawControlCmd() 会把该结构映射为 uniubi::msg::RemoteControl。
-  struct TRCStickFrame
-  {
-    std::uint32_t valid = 0;                 ///< 非 0 表示 buttons/axes 数据有效。
-    std::uint8_t buttons[BUTTON_MAX] = {};   ///< 按键状态，索引见 ButtonDefine。
-    float axes[AXES_MAX] = {};               ///< 摇杆和扳机值，索引见 AxesDefine。
-    std::uint64_t control_id = 0;            ///< 保留字段；实际发送时使用服务端下发的 rawActionId。
   };
 
   /// 控制权状态变化回调。成功取权、释放、续约失效、被抢权时触发。
@@ -151,7 +107,7 @@ public:
    * @brief 申请高级运动控制权。
    *
    * 先将电机运控 master 切回内置小脑并等待切换稳定，再申请 High-level RPC 会话。
-   * 成功后保存服务端返回的 controller/rawActionId，状态切为 kControlled，
+   * 成功后保存服务端返回的 controller，状态切为 kControlled，
    * 并启动租约维护定时器；成功控制调用会刷新租约，控制空闲时才发送 renewMotionControl。
    */
   bool startControl(int32_t timeout_ms = 10000);
@@ -209,14 +165,6 @@ public:
     const std::string & params_json = "",
     int32_t timeout_ms = 5000);
 
-  /**
-   * @brief 发送原始 TRC 控制帧。
-   *
-   * 必须持有控制权，并且 takeMotionControl 响应中包含非 0 rawActionId。
-   * 发送时 RemoteControl.controller 使用 rawActionId，不使用字符串 controller token。
-   */
-  bool setRawControlCmd(const TRCStickFrame & frame);
-
   /// 急停。必须持有控制权。
   bool emergencyStop(int32_t timeout_ms = 5000);
 
@@ -267,7 +215,6 @@ private:
   using MotionObserved = uniubi::msg::MotionObserved;
   using SensorObserved = uniubi::msg::SensorObserved;
   using MotionOdometry = uniubi::msg::MotionOdometry;
-  using RemoteControl = uniubi::msg::RemoteControl;
 
   bool ensure_connected();
 
@@ -327,7 +274,7 @@ private:
     const std::string & controller,
     SharedFuture future);
 
-  /// 统一处理失权：停止续约、清空 controller/rawActionId、切回 kConnected 并触发回调。
+  /// 统一处理失权：停止续约、清空 controller、切回 kConnected 并触发回调。
   void lose_control(HighLevelError error);
 
   /// 创建 robotServer 事件订阅。
@@ -352,7 +299,6 @@ private:
   rclcpp::Subscription<EventMessage>::SharedPtr event_subscription_;
   rclcpp::Subscription<SensorObserved>::SharedPtr sensor_observed_subscription_;
   rclcpp::Subscription<MotionObserved>::SharedPtr motion_observed_subscription_;
-  rclcpp::Publisher<RemoteControl>::SharedPtr raw_control_publisher_;
   rclcpp::TimerBase::SharedPtr renew_timer_;
   std::optional<std::int64_t> pending_renew_request_id_;
   std::optional<std::chrono::steady_clock::time_point> pending_renew_deadline_;
@@ -366,8 +312,6 @@ private:
   std::unique_ptr<CereSensorReader> cere_sensor_reader_;
   std::string motion_observed_topic_;
   std::string controller_;
-  std::uint64_t raw_action_id_;
-  std::uint64_t raw_control_seq_;
   int32_t lease_ms_;
   HighLevelState state_;
   mutable HighLevelError last_error_;
