@@ -53,14 +53,17 @@ Install `uniubi_robot_sdk` first so that CMake can find
 
 ```bash
 source /opt/ros/humble/setup.bash
-cmake -S ~/uniubi_robot_sdk -B /tmp/uniubi_robot_sdk_build -DBUILD_SDK_CPP_EXAMPLES=OFF
-cmake --install /tmp/uniubi_robot_sdk_build --prefix ~/uniubi_robot_sdk_install
-
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
+cmake -S .deps/uniubi_robot_sdk -B build-sdk -DBUILD_SDK_CPP_EXAMPLES=OFF
+cmake --build build-sdk -j4
+cmake --install build-sdk --prefix "$PWD/.deps/sdk-install"
+export CMAKE_PREFIX_PATH="$HOME/uniubi_ros2/.deps/sdk-install:${CMAKE_PREFIX_PATH:-}"
+mkdir -p ~/ros2_ws
 cd ~/ros2_ws
-export CMAKE_PREFIX_PATH="$HOME/uniubi_robot_sdk_install:${CMAKE_PREFIX_PATH:-}"
-colcon build --packages-select uniubi_media_driver
+colcon build --base-paths "$HOME/uniubi_ros2/src" "$HOME/uniubi_ros2/.deps/uniubi_robot_msgs/ros2" --packages-select uniubi_media_driver
 source install/setup.bash
-export LD_LIBRARY_PATH="$HOME/uniubi_robot_sdk_install/lib/aarch64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$HOME/uniubi_ros2/.deps/sdk-install/lib/aarch64:${LD_LIBRARY_PATH:-}"
 ros2 launch uniubi_media_driver media_driver.launch.py
 ```
 
@@ -71,7 +74,7 @@ ros2 launch uniubi_media_driver media_driver.launch.py \
   video_backend:=rtsp host:=192.168.1.10
 ```
 
-For an external ARM64 host, install the SDK with `-DPLATFORM=aarch64_host`; choose the matching SDK library directory: `aarch64` (robot Orin brain), `x86_64`, or `aarch64_host`. See the [RTSP guide](RTSP.md) for minimal builds and old build caches.
+For an external ARM64 host, configure the SDK with `-DPLATFORM=aarch64_host` and append `--cmake-args -DPLATFORM=aarch64_host` to the colcon build command; choose the matching SDK library directory: `aarch64` (robot Orin brain), `x86_64`, or `aarch64_host`. See the [RTSP guide](RTSP.md) for minimal builds and old build caches.
 
 Inspect one stream:
 

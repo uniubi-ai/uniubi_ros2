@@ -16,15 +16,20 @@ Use the updated C++ SDK with `createAudioRawBack`. The new audio message belongs
 
 ```bash
 source /opt/ros/humble/setup.bash
-# x86 or native brain. Add -DPLATFORM=aarch64_host for a generic ARM64 host.
-cmake -S ~/uniubi_robot_sdk -B /tmp/sdk-install-build -DBUILD_SDK_CPP_EXAMPLES=OFF
-cmake --install /tmp/sdk-install-build --prefix "$HOME/uniubi_sdk_install"
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
+# x86 or native brain; add -DPLATFORM=aarch64_host to the SDK configure command on generic ARM64 hosts.
+cmake -S .deps/uniubi_robot_sdk -B build-sdk -DBUILD_SDK_CPP_EXAMPLES=OFF
+cmake --build build-sdk -j4
+cmake --install build-sdk --prefix "$HOME/uniubi_ros2/.deps/sdk-install"
+export CMAKE_PREFIX_PATH="$HOME/uniubi_ros2/.deps/sdk-install:${CMAKE_PREFIX_PATH:-}"
+mkdir -p ~/ros2_ws
 cd ~/ros2_ws
-colcon build --packages-select uniubi_media_driver --cmake-args \
-  -DCMAKE_PREFIX_PATH="$HOME/uniubi_sdk_install"
-# Also add -DPLATFORM=aarch64_host to colcon's CMake arguments on generic ARM64 hosts.
+colcon build --base-paths "$HOME/uniubi_ros2/src" "$HOME/uniubi_ros2/.deps/uniubi_robot_msgs/ros2" \
+  --packages-select uniubi_media_driver
+# On external ARM64 hosts, append --cmake-args -DPLATFORM=aarch64_host to colcon above.
 source install/setup.bash
-export LD_LIBRARY_PATH="$HOME/uniubi_sdk_install/lib/x86_64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$HOME/uniubi_ros2/.deps/sdk-install/lib/x86_64:${LD_LIBRARY_PATH:-}"
 # Use lib/aarch64 on the brain, lib/aarch64_host on generic ARM64 hosts.
 ```
 

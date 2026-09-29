@@ -109,19 +109,18 @@ export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><Networ
 ## 构建
 
 ```bash
-mkdir -p ~/ros2_ws/src
-
-git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
-
-git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
-cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
-cp -r ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/
-
+git clone --branch Cyvet-V1.00.001 https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
+source /opt/ros/humble/setup.bash
+mkdir -p ~/ros2_ws
 cd ~/ros2_ws
-colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
-. install/setup.bash
+colcon build --base-paths "$HOME/uniubi_ros2/src" "$HOME/uniubi_ros2/.deps/uniubi_robot_msgs/ros2" \
+  --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
+source install/setup.bash
 ```
+
+脚本读取 [`dependencies.lock`](dependencies.lock)，核对 Git 源和干净工作区，并在 `.deps/` 中检出 SDK 与 `uniubi_robot_msgs` 的固定提交。`.deps/uniubi_robot_msgs/ros2` 中的 ROS 2 包名是 `uniubi`。锁文件变更后重新运行脚本；它会拒绝有改动或来源不符的仓库。切换 ROS 仓库版本后，应重新运行脚本，并使用全新的 `~/ros2_ws/build/`、`~/ros2_ws/install/`、`~/ros2_ws/log/` 目录构建，避免旧接口生成文件和 CMake 缓存。
 
 `uniubi_media_driver` 是可选的媒体包，具有单独的 SDK 依赖。构建和运行方式见
 [`src/uniubi_media_driver/README.zh-CN.md`](src/uniubi_media_driver/README.zh-CN.md)。

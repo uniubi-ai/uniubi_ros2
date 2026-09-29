@@ -89,19 +89,18 @@ Interface names differ on other platforms. Run `ip -br addr`, identify the inter
 ## Build
 
 ```bash
-mkdir -p ~/ros2_ws/src
-
-git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
-
-git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
-cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
-cp -r ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/
-
+git clone --branch Cyvet-V1.00.001 https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
+source /opt/ros/humble/setup.bash
+mkdir -p ~/ros2_ws
 cd ~/ros2_ws
-colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
-. install/setup.bash
+colcon build --base-paths "$HOME/uniubi_ros2/src" "$HOME/uniubi_ros2/.deps/uniubi_robot_msgs/ros2" \
+  --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
+source install/setup.bash
 ```
+
+The script reads [`dependencies.lock`](dependencies.lock), checks the Git origin and clean working tree, and selects the exact SDK and `uniubi_robot_msgs` commits in `.deps/`. The message package under `.deps/uniubi_robot_msgs/ros2` is named `uniubi`. Re-run the script after changing the lock; it refuses dirty or wrong-origin checkouts. When switching the ROS repository revision, rerun the script and build with fresh `~/ros2_ws/build/`, `~/ros2_ws/install/`, and `~/ros2_ws/log/` directories to avoid stale generated interfaces and CMake caches.
 
 `uniubi_media_driver` is an optional media package with a separate SDK dependency. See
 [`src/uniubi_media_driver/README.md`](src/uniubi_media_driver/README.md) for its build and runtime setup.

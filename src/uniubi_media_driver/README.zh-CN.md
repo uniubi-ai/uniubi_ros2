@@ -46,14 +46,18 @@ ROS 2 工作区构建：
 
 ```bash
 source /opt/ros/humble/setup.bash
-cmake -S ~/uniubi_robot_sdk -B /tmp/uniubi_robot_sdk_build -DBUILD_SDK_CPP_EXAMPLES=OFF
-cmake --install /tmp/uniubi_robot_sdk_build --prefix ~/uniubi_robot_sdk_install
-
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
+cmake -S .deps/uniubi_robot_sdk -B build-sdk -DBUILD_SDK_CPP_EXAMPLES=OFF
+cmake --build build-sdk -j4
+cmake --install build-sdk --prefix "$PWD/.deps/sdk-install"
+export CMAKE_PREFIX_PATH="$HOME/uniubi_ros2/.deps/sdk-install:${CMAKE_PREFIX_PATH:-}"
+mkdir -p ~/ros2_ws
 cd ~/ros2_ws
-export CMAKE_PREFIX_PATH="$HOME/uniubi_robot_sdk_install:${CMAKE_PREFIX_PATH:-}"
-colcon build --packages-select uniubi_media_driver
+colcon build --base-paths "$HOME/uniubi_ros2/src" "$HOME/uniubi_ros2/.deps/uniubi_robot_msgs/ros2" --packages-select uniubi_media_driver
+# 外部 ARM64 host 的 SDK 配置需加 -DPLATFORM=aarch64_host，colcon 需加 --cmake-args -DPLATFORM=aarch64_host。
 source install/setup.bash
-export LD_LIBRARY_PATH="$HOME/uniubi_robot_sdk_install/lib/aarch64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$HOME/uniubi_ros2/.deps/sdk-install/lib/aarch64:${LD_LIBRARY_PATH:-}"
 ros2 launch uniubi_media_driver media_driver.launch.py
 ```
 
