@@ -1,4 +1,6 @@
 #include "uniubi_motion_bridge/srv/json_command.hpp"
+#include "uniubi_motion_bridge/frame_id.hpp"
+#include "uniubi_motion_bridge/battery_status.hpp"
 #include "uniubi_motion_bridge/msg/gps_observed.hpp"
 #include "uniubi_motion_bridge/msg/uwb_observed.hpp"
 #include <atomic>
@@ -111,28 +113,30 @@ public:
     robot_service_name_ = declare_parameter<std::string>("robot_service_name", "robotServer");
     event_topic_ = declare_parameter<std::string>("event_topic", "/robotServer/Event");
     const auto sensor_source = declare_parameter<std::string>("sensor_observed_source", "sensor_observed");
+    battery_from_system_status_ = sensor_source == "cere_motion_state";
     const auto cere_topic = declare_parameter<std::string>("cere_motion_topic", "rt/cere/motionState");
     device_id_ = declare_parameter<std::string>("device_id", "");
     lease_ms_ = declare_parameter<int32_t>("lease_ms", 60000);
     auto_connect_ = declare_parameter<bool>("auto_connect", true);
-    cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "/cmd_vel");
+    cmd_vel_topic_ = declare_parameter<std::string>("cmd_vel_topic", "cmd_vel");
     cmd_vel_timeout_ms_ = declare_parameter<int32_t>("cmd_vel_timeout_ms", 500);
     cmd_vel_rate_hz_ = declare_parameter<double>("cmd_vel_rate_hz", 30.0);
-    odom_topic_ = declare_parameter<std::string>("odom_topic", "/odom");
-    odom_frame_id_ = declare_parameter<std::string>("odom_frame_id", "odom");
-    base_frame_id_ = declare_parameter<std::string>("base_frame_id", "base_link");
+    odom_topic_ = declare_parameter<std::string>("odom_topic", "odom");
+    frame_prefix_ = declare_parameter<std::string>("frame_prefix", "");
+    odom_frame_id_ = prefixed_frame_id(frame_prefix_, declare_parameter<std::string>("odom_frame_id", "odom"));
+    base_frame_id_ = prefixed_frame_id(frame_prefix_, declare_parameter<std::string>("base_frame_id", "base_link"));
     publish_joint_states_ = declare_parameter<bool>("publish_joint_states", true);
-    joint_states_topic_ = declare_parameter<std::string>("joint_states_topic", "/joint_states");
+    joint_states_topic_ = declare_parameter<std::string>("joint_states_topic", "joint_states");
     fallback_limb_sizes_ = declare_parameter<std::vector<int64_t>>(
       "fallback_limb_sizes", std::vector<int64_t>{});
     fallback_joint_names_ = declare_parameter<std::vector<std::string>>(
       "fallback_joint_names", std::vector<std::string>{});
-    imu_topic_ = declare_parameter<std::string>("imu_topic", "/imu/data");
-    imu_frame_id_ = declare_parameter<std::string>("imu_frame_id", "imu_link");
-    battery_topic_ = declare_parameter<std::string>("battery_topic", "/battery_state");
+    imu_topic_ = declare_parameter<std::string>("imu_topic", "imu/data");
+    imu_frame_id_ = prefixed_frame_id(frame_prefix_, declare_parameter<std::string>("imu_frame_id", "imu_link"));
+    battery_topic_ = declare_parameter<std::string>("battery_topic", "battery_state");
     battery_publish_rate_hz_ = declare_parameter<double>("battery_publish_rate_hz", 1.0);
     motion_status_topic_ = declare_parameter<std::string>(
-      "motion_status_topic", "/motion/status");
+      "motion_status_topic", "motion/status");
     motion_status_rate_hz_ = declare_parameter<double>("motion_status_rate_hz", 10.0);
 
     if (cmd_vel_timeout_ms_ <= 0) {
@@ -180,31 +184,31 @@ public:
       });
 
     release_control_service_ = create_service<std_srvs::srv::Trigger>(
-      "/motion/release_control",
+      "motion/release_control",
       [this](const std_srvs::srv::Trigger::Request::SharedPtr,
       std_srvs::srv::Trigger::Response::SharedPtr response) {
         set_response(response, submit([this]() {return release_control();}));
       });
     query_capabilities_service_ = create_service<std_srvs::srv::Trigger>(
-      "/motion/query_capabilities",
+      "motion/query_capabilities",
       [this](const std_srvs::srv::Trigger::Request::SharedPtr,
       std_srvs::srv::Trigger::Response::SharedPtr response) {
         set_response(response, submit([this]() {return query_capabilities();}));
       });
     stop_action_service_ = create_service<std_srvs::srv::Trigger>(
-      "/motion/stop_action",
+      "motion/stop_action",
       [this](const std_srvs::srv::Trigger::Request::SharedPtr,
       std_srvs::srv::Trigger::Response::SharedPtr response) {
         set_response(response, submit([this]() {return stop_action("service request");}));
       });
     emergency_stop_service_ = create_service<std_srvs::srv::Trigger>(
-      "/motion/emergency_stop",
+      "motion/emergency_stop",
       [this](const std_srvs::srv::Trigger::Request::SharedPtr,
       std_srvs::srv::Trigger::Response::SharedPtr response) {
         set_response(response, submit([this]() {return emergency_stop();}));
       });
     start_action_service_ = create_service<uniubi_motion_bridge::srv::StartMotionAction>(
-      "/motion/start_action",
+      "motion/start_action",
       [this](const uniubi_motion_bridge::srv::StartMotionAction::Request::SharedPtr request,
       uniubi_motion_bridge::srv::StartMotionAction::Response::SharedPtr response) {
         const auto result = submit(
@@ -223,11 +227,12 @@ public:
     client_executor_->add_node(client_node_);
     motion_client_ = std::make_unique<MotionClient>(
       client_node_, *client_executor_, robot_service_name_, device_id_, event_topic_,
-      "/sensor/observed", "/motion/observed", sensor_source, cere_topic);
+      "", "", sensor_source, cere_topic);
     motion_client_->setConnectCallback(
       [this](MotionClient::HighLevelState state, MotionClient::HighLevelError error) {
         if (state == MotionClient::kDisconnected) {
           cancel_motion_status_query();
+          cancel_battery_status_query();
           current_action_.clear();
           current_linear_x_ = current_linear_y_ = current_angular_z_ = 0.0F;
           reset_velocity_tracking();
@@ -323,11 +328,13 @@ private:
       client_executor_->spin_some();
       if (rpc_ready_) {
         update_motion_status();
+        update_battery_status();
       }
     }
 
     if (motion_client_) {
       cancel_motion_status_query();
+      cancel_battery_status_query();
       if (motion_client_->getState() == MotionClient::kControlled && !current_action_.empty()) {
         (void)stop_action("node shutdown");
       }
@@ -709,6 +716,74 @@ private:
     publish_motion_status();
   }
 
+  void cancel_battery_status_query()
+  {
+    ++battery_status_query_sequence_;
+    battery_status_response_at_.reset();
+    if (pending_battery_status_query_) {
+      motion_client_->remove_pending_request(pending_battery_status_query_->request_id);
+      pending_battery_status_query_.reset();
+    }
+  }
+
+  void update_battery_status()
+  {
+    if (!battery_from_system_status_ || !motion_observed_enabled_) {
+      cancel_battery_status_query();
+      return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    try {
+      if (!pending_battery_status_query_) {
+        if (now < next_battery_publish_at_) {return;}
+        const auto sequence = ++battery_status_query_sequence_;
+        battery_status_response_at_.reset();
+        pending_battery_status_query_.emplace(motion_client_->async_call(
+          uniubi_motion_client::SystemRpcCall(
+            "robotAppService", "getSystemStatus", Json::Value(Json::nullValue),
+            motion_client_->client_id(), motion_client_->device_id(), MotionClient::now_ms()),
+          [this, sequence](MotionClient::SharedFuture) {
+            if (sequence == battery_status_query_sequence_) {
+              battery_status_response_at_ = std::chrono::steady_clock::now();
+            }
+          }));
+        battery_status_query_deadline_ = now + std::chrono::seconds(1);
+        return;
+      }
+      if (battery_status_response_at_.value_or(now) >= battery_status_query_deadline_) {
+        throw std::runtime_error("getSystemStatus timed out after 1000 ms");
+      }
+      if (pending_battery_status_query_->wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        return;
+      }
+      const auto response = pending_battery_status_query_->get();
+      pending_battery_status_query_.reset();
+      next_battery_publish_at_ = now + battery_publish_period_;
+      if (!response || response->code != 0) {
+        throw std::runtime_error("getSystemStatus RPC failed");
+      }
+      Json::Value payload;
+      Json::CharReaderBuilder builder;
+      std::string parse_error;
+      std::istringstream stream(response->payload);
+      if (!Json::parseFromStream(builder, stream, &payload, &parse_error) || !payload.isObject() ||
+        !payload["result"].isBool() || !payload["result"].asBool())
+      {
+        throw std::runtime_error("getSystemStatus returned invalid response");
+      }
+      sensor_msgs::msg::BatteryState battery;
+      if (!battery_from_system_status(payload["params"], battery)) {
+        throw std::runtime_error("getSystemStatus returned no valid battery measurement");
+      }
+      battery.header.stamp = this->now();
+      battery_publisher_->publish(battery);
+    } catch (const std::exception & error) {
+      cancel_battery_status_query();
+      next_battery_publish_at_ = now + battery_publish_period_;
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "%s", error.what());
+    }
+  }
+
   void on_cmd_vel(const geometry_msgs::msg::Twist & message)
   {
     const auto x = message.linear.x;
@@ -832,7 +907,7 @@ private:
             return {false, MotionClient::kActionRejected, "params_json must be a JSON object"};
           }
           if (controlled && motion_client_->getState() != MotionClient::kControlled) {
-            return {false, MotionClient::kNotControlled, "call /motion/acquire_control first"};
+            return {false, MotionClient::kNotControlled, "call motion/acquire_control in this bridge namespace first"};
           }
           const auto connected = connect_client();
           if (!connected.success) return connected;
@@ -854,34 +929,34 @@ private:
       "gps/observed", rclcpp::SensorDataQoS());
     uwb_publisher_ = create_publisher<uniubi_motion_bridge::msg::UwbObserved>(
       "uwb/observed", rclcpp::SensorDataQoS());
-    acquire_control_service_ = create_service<std_srvs::srv::Trigger>("/motion/acquire_control",
+    acquire_control_service_ = create_service<std_srvs::srv::Trigger>("motion/acquire_control",
       [this](const std_srvs::srv::Trigger::Request::SharedPtr,
         std_srvs::srv::Trigger::Response::SharedPtr response) {
         set_response(response, submit([this]() {bool acquired = false; return acquire_control(acquired);}));
       });
-    add_json_service("/motion/query_system_status", false,
+    add_json_service("motion/query_system_status", false,
       [this](const std::string & , std::string & out) {return motion_client_->querySystemStatus(out);});
-    add_json_service("/motion/query_state", false,
+    add_json_service("motion/query_state", false,
       [this](const std::string & , std::string & out) {return motion_client_->queryMotionState(out);});
-    add_json_service("/motion/query_motor_layout", false,
+    add_json_service("motion/query_motor_layout", false,
       [this](const std::string & , std::string & out) {return motion_client_->queryMotorLayout(out);});
-    add_json_service("/audio/query_play_list", false,
+    add_json_service("audio/query_play_list", false,
       [this](const std::string & params, std::string & out) {return motion_client_->queryAudioPlayList(out, params);});
-    add_json_service("/audio/query_play_detail", false,
+    add_json_service("audio/query_play_detail", false,
       [this](const std::string & , std::string & out) {return motion_client_->queryAudioPlayDetail(out);});
-    add_json_service("/audio/start_play", true,
+    add_json_service("audio/start_play", true,
       [this](const std::string & params, std::string & ) {return motion_client_->startAudioPlay(params);});
-    add_json_service("/audio/stop_play", true,
+    add_json_service("audio/stop_play", true,
       [this](const std::string & , std::string & ) {return motion_client_->stopAudioPlay();});
-    add_json_service("/audio/pause_play", true,
+    add_json_service("audio/pause_play", true,
       [this](const std::string & , std::string & ) {return motion_client_->pauseAudioPlay();});
-    add_json_service("/audio/add_file", true,
+    add_json_service("audio/add_file", true,
       [this](const std::string & params, std::string & ) {return motion_client_->addAudioFile(params);});
-    add_json_service("/audio/delete_file", true,
+    add_json_service("audio/delete_file", true,
       [this](const std::string & params, std::string & ) {return motion_client_->deleteAudioFile(params);});
-    add_json_service("/light/query_brightness", true,
+    add_json_service("light/query_brightness", true,
       [this](const std::string & , std::string & out) {return motion_client_->getCameraLightBrightness(out);});
-    add_json_service("/light/set_brightness", true,
+    add_json_service("light/set_brightness", true,
       [this](const std::string & params, std::string &) {
         Json::Value value; Json::CharReaderBuilder reader; std::string error;
         std::istringstream input(params); Json::parseFromStream(reader, input, &value, &error);
@@ -889,7 +964,7 @@ private:
         return motion_client_->setCameraLightBrightness(
           value["brightness"].isInt() ? value["brightness"].asInt() : -1);
       });
-    add_json_service("/motion/set_action_params", true,
+    add_json_service("motion/set_action_params", true,
       [this](const std::string & params, std::string &) {
         const bool ok = motion_client_->setActionParams(params);
         if (ok) {
@@ -1077,6 +1152,7 @@ private:
     if (!motion_observed_enabled_) {
       return;
     }
+    cancel_battery_status_query();
     (void)motion_client_->setMotionObservedEnable(false, false, 3000);
     motion_observed_enabled_ = false;
   }
@@ -1091,7 +1167,7 @@ private:
     publish_imu(input, stamp);
 
     const auto steady_now = std::chrono::steady_clock::now();
-    if (steady_now >= next_battery_publish_at_) {
+    if (!battery_from_system_status_ && steady_now >= next_battery_publish_at_) {
       publish_battery(input, stamp);
       next_battery_publish_at_ = steady_now + battery_publish_period_;
     }
@@ -1218,6 +1294,7 @@ private:
   int32_t cmd_vel_timeout_ms_{500};
   double cmd_vel_rate_hz_{30.0};
   std::string odom_topic_;
+  std::string frame_prefix_;
   std::string odom_frame_id_;
   std::string base_frame_id_;
   bool publish_joint_states_{true};
@@ -1267,6 +1344,11 @@ private:
   bool velocity_watchdog_fired_{false};
   std::vector<MotorLayoutEntry> motor_layout_;
   bool motion_observed_enabled_{false};
+  bool battery_from_system_status_{false};
+  std::optional<MotionClient::SharedFutureAndRequestId> pending_battery_status_query_;
+  std::optional<std::chrono::steady_clock::time_point> battery_status_response_at_;
+  uint64_t battery_status_query_sequence_{0};
+  std::chrono::steady_clock::time_point battery_status_query_deadline_{};
   bool rpc_ready_{false};
   std::chrono::steady_clock::time_point next_battery_publish_at_{};
   std::chrono::milliseconds battery_publish_period_{1000};

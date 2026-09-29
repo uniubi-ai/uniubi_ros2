@@ -13,17 +13,17 @@ Direct DDS 和 Direct RPC 是两种平级接入方式。
 
 原始持续数据通过 DDS/ROS 2 topic 提供：
 
-- Motion observation topic：`/motion/observed`
-- Sensor observation topic：`/sensor/observed`（GPS、UWB、Walk 里程计）
+- Motion observation topic：`/robot/<SN>/motion/observed`
+- Sensor observation topic：`/robot/<SN>/sensor/observed`（GPS、UWB、Walk 里程计）
 
-订阅这些观测 topic 不要求持有 High Level 控制权。`/motion/observed` 和
-`/sensor/observed` 默认关闭，协议直连使用者必须先建立 reader，
+订阅这些观测 topic 不要求持有 High Level 控制权。`/robot/<SN>/motion/observed` 和
+`/robot/<SN>/sensor/observed` 默认关闭，协议直连使用者必须先建立 reader，
 再通过无需运动控制权的 RPC 调用 `setMotionObservedEnable()` 开启。Motion bridge 会自动管理
 原始观测流，其业务节点只需订阅 bridge 发布的标准 ROS 2 topic。当前 bridge 实现会在开启 RPC
 完成后才创建原始订阅，因此首批观测帧可能丢失；协议直连仍应遵守先建立 reader 的顺序。原始 topic
 测试通过只说明消息类型、DDS 发现和 QoS 链路可用。
 
-`/sensor/observed` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，由
+`/robot/<SN>/sensor/observed` 使用 `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE`，由
 `setMotionObservedEnable(..., sensor_enable=true)` 开启。里程计从 `SensorObserved.odom`
 读取，仅在 Walk 模式有效；退出 Walk 时保留当前区间末值并置 `valid=false`，再次进入 Walk 时
 建立新原点并递增 `epoch`。
@@ -58,16 +58,16 @@ RPC 测试通过只说明请求/响应契约和路由可用，不能代表 C++ �
 
 `/odom` 仅转发 `valid=true` 的设备累计里程计，不再次积分，也暂不发布 TF。
 `position.y` 和 `twist.linear.y` 均为正左负右，bridge 不做符号转换。原始生命周期字段仍以
-`/sensor/observed` 中的 `odom` 为准。
+`/robot/<SN>/sensor/observed` 中的 `odom` 为准。
 
 ## Motion bridge 状态观测
 
 - `/motion/status` 通过 10 Hz `queryMotionState` RPC 发布实际动作、速度、控制状态和最近错误；它不参与 `/cmd_vel` 下发。
 - `/motion/status` 最多有一个查询周期的显示延迟，不能当作逐控制帧反馈。
 - 内部 Event 用于立即发现控制权抢占；bridge 将已知事件转换成结构化状态。
-- `/joint_states`、`/imu/data` 和 `/battery_state` 都由 `/motion/observed` 转换，不需要 High Level 控制权。
+- `/joint_states`、`/imu/data` 和 `/battery_state` 都由 `/robot/<SN>/motion/observed` 转换，不需要 High Level 控制权。
 - bridge 通过只读 `getMotorLayout` RPC 获取关节名称和 `(limbNo, jointNo)`，不依赖固定电机数组顺序。
-- `/joint_states` 的 position/velocity/effort 分别来自电机 position/velocity/torque；故障码、在线状态和温度仍以原始 `/motion/observed` 为准。
+- `/joint_states` 的 position/velocity/effort 分别来自电机 position/velocity/torque；故障码、在线状态和温度仍以原始 `/robot/<SN>/motion/observed` 为准。
 - `/imu/data` 仅在 accel/gyro 有效时发布；四元数无效时按 `sensor_msgs/Imu` 约定标记 orientation 不可用。
 - `/battery_state.percentage` 范围为 0-1；设备 power 原始字段范围为 0-100。未提供的容量字段用 NaN 表示。
 
@@ -85,14 +85,16 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_LOCALHOST_ONLY=0
 ```
 
-`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将目标 `device_id` 写入每个 `System.srv`
-请求；robotServer 按目标设备 SN 过滤 RPC 请求，只有匹配设备响应。但该机制只覆盖 RPC，不能
-隔离 `/motion/observed`、`/sensor/observed` 和 `/robotServer/Event` 等
-原始 topic，因为这些消息当前没有可供 bridge 过滤的 `device_id`。
+`MotionHighLevelClient` 和 `SystemRpcClientBase` 会将目标 `device_id` 写入每个
+`System.srv` 请求，robotServer 按目标 SN 路由 RPC。Host 观测 topic 使用
+`/robot/<SN>/motion/observed` 和 `/robot/<SN>/sensor/observed`（原生 DDS
+`rt/robot/<SN>/...`）；共享的 `/robotServer/Event` 载体使用逻辑事件名
+`<SN>.robotServer.control.status` 和 `<SN>.robotServer.host.event`。客户端处理前先按
+SN 过滤事件；板内 cere 模式保留原事件路径。需要配套更新的机器人发布端，不自动回退到旧的共享观测 topic。
 
-此外，多个 bridge 使用相同的 `/cmd_vel`、`/motion/*`、`/odom` 等全局 ROS 名称时也会发生接口
-冲突。因此当前多机器人部署应同时做到：每条机器人使用独立的 `ROS_DOMAIN_ID`，并避免多个
-bridge 出现在同一 ROS graph。仅设置不同的 RPC `device_id` 不足以保证多机器人隔离。
+多个 bridge 可以在同一 ROS 图中分别使用不同的 launch `namespace` 与 `device_id`；
+使用 `frame_prefix` 避免 frame ID 冲突。默认空 namespace 保留原有根路径。
+板内 `cere_motion_state` 路径仍为 `rt/cere/motionState`。
 
 字段边界如下：
 

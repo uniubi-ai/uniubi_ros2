@@ -22,7 +22,7 @@ using Client = uniubi_motion_client::MotionHighLevelClient;
 constexpr const char * kDefaultDomainId = "42";
 constexpr const char * kDefaultService = "robotServer";
 constexpr const char * kDefaultEventTopic = "/robotServer/Event";
-constexpr const char * kDefaultSensorTopic = "/sensor/observed";
+constexpr const char * kDefaultSensorTopic = "";
 constexpr const char * kStopVelocity =
   R"({"lineVelocityX":0.0,"lineVelocityY":0.0,"velocity":0.0})";
 

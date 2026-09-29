@@ -223,9 +223,10 @@ See the [Motion bridge guide](docs/motion_bridge.md) for fields, ownership lifec
 
 ```bash
 ROS_DOMAIN_ID=42 \
-UNIUBI_TEST_SENSOR_OBSERVED_TOPIC=/sensor/observed \
+UNIUBI_TEST_DEVICE_ID=REPLACE_WITH_ROBOT_SN \
 ros2 run uniubi_motion_client sensor_observed_subscriber
 ```
+
 
 ## Audio and video
 

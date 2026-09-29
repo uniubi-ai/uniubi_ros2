@@ -149,11 +149,11 @@ Event               设备主动推送的状态变化
 应用直接订阅原始数据 topic，不经过 bridge 的标准消息转换。常用入口包括：
 
 ```text
-/motion/observed
-/sensor/observed
+/robot/<SN>/motion/observed
+/robot/<SN>/sensor/observed
 ```
 
-这条路径主要用于持续数据流。`/motion/observed` 和 `/sensor/observed` 默认关闭，
+这条路径主要用于持续数据流。`/robot/<SN>/motion/observed` 和 `/robot/<SN>/sensor/observed` 默认关闭，
 需要先建立 reader，再通过 RPC 调用
 `setMotionObservedEnable` 开启，但该启用调用不要求持有运动控制权。
 

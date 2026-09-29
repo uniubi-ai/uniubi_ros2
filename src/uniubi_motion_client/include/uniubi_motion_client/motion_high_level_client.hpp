@@ -76,7 +76,9 @@ public:
    * @param executor 用于同步 RPC、timer、service response 和 event subscription 的 executor。
    * @param ros_service_name ROS 2 System 服务名称，当前默认为 robotServer。
    * @param device_id 目标设备 ID，多设备场景必须传入。
-   * @param event_topic robotServer 事件 topic。
+   * @param event_topic robotServer 事件载体 topic；事件名按 device_id 过滤。
+   * @param sensor_observed_topic 可选原生 DDS topic 覆盖；Host 模式空值使用 /robot/<device_id>/sensor/observed；板内模式保留旧路径。
+   * @param motion_observed_topic 可选原生 DDS topic 覆盖；Host 模式空值使用 /robot/<device_id>/motion/observed；板内模式保留旧路径。
    */
   MotionHighLevelClient(
     const rclcpp::Node::SharedPtr & node,
@@ -84,8 +86,8 @@ public:
     const std::string & ros_service_name,
     const std::string & device_id = "",
     const std::string & event_topic = "/robotServer/Event",
-    const std::string & sensor_observed_topic = "/sensor/observed",
-    const std::string & motion_observed_topic = "/motion/observed",
+    const std::string & sensor_observed_topic = "",
+    const std::string & motion_observed_topic = "",
     const std::string & sensor_observed_source = "sensor_observed",
     const std::string & cere_motion_topic = "rt/cere/motionState");
 
@@ -310,6 +312,9 @@ private:
   std::string sensor_observed_source_;
   std::string cere_motion_topic_;
   std::unique_ptr<CereSensorReader> cere_sensor_reader_;
+  bool cere_sensor_enabled_{false};
+  bool cere_motion_enabled_{false};
+  void create_cere_observed_reader();
   std::string motion_observed_topic_;
   std::string controller_;
   int32_t lease_ms_;

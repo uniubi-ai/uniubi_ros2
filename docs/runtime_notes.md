@@ -12,12 +12,12 @@ Direct protocol integration includes RPC, Event, and raw observation topics. The
 
 Continuous raw data is available through DDS/ROS 2 topics:
 
-- Motion observation: `/motion/observed`
-- Sensor observation: `/sensor/observed` (GPS, UWB, and Walk odometry)
+- Motion observation: `/robot/<SN>/motion/observed`
+- Sensor observation: `/robot/<SN>/sensor/observed` (GPS, UWB, and Walk odometry)
 
-Subscribing to observation topics does not require High Level control ownership. `/motion/observed` and `/sensor/observed` are disabled by default. Direct-protocol clients must create the reader first and then call the control-free `setMotionObservedEnable()` RPC. The Motion bridge manages raw observation streams automatically; its application nodes only subscribe to the standard ROS 2 topics published by the bridge. In the current bridge implementation, the enable RPC completes before the raw subscriptions are created, so the first observation frames may be lost; direct-protocol clients should continue to follow the reader-first protocol order. A successful raw-topic test proves only that the message type, DDS discovery, and QoS path work.
+Subscribing to observation topics does not require High Level control ownership. `/robot/<SN>/motion/observed` and `/robot/<SN>/sensor/observed` are disabled by default. Direct-protocol clients must create the reader first and then call the control-free `setMotionObservedEnable()` RPC. The Motion bridge manages raw observation streams automatically; its application nodes only subscribe to the standard ROS 2 topics published by the bridge. In the current bridge implementation, the enable RPC completes before the raw subscriptions are created, so the first observation frames may be lost; direct-protocol clients should continue to follow the reader-first protocol order. A successful raw-topic test proves only that the message type, DDS discovery, and QoS path work.
 
-`/sensor/observed` uses `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE` and is enabled with `setMotionObservedEnable(..., sensor_enable=true)`. Odometry comes from `SensorObserved.odom` and is valid only in Walk mode. When Walk ends, the final value for that interval is retained and `valid=false`. Entering Walk again establishes a new origin and increments `epoch`.
+`/robot/<SN>/sensor/observed` uses `BEST_EFFORT` / `KEEP_LAST depth=1` / `VOLATILE` and is enabled with `setMotionObservedEnable(..., sensor_enable=true)`. Odometry comes from `SensorObserved.odom` and is valid only in Walk mode. When Walk ends, the final value for that interval is retained and `valid=false`. Entering Walk again establishes a new origin and increments `epoch`.
 
 ### RPC, Event, and control
 
@@ -41,16 +41,16 @@ Read-only queries do not require control ownership. For control RPCs, the caller
 - Successful `startAction`, `setActionParams`, `stopAction`, and `emergencyStop` calls refresh the server-side control lease. The client sends `renewMotionControl` only when control RPCs have been idle for a renewal interval. Failed or timed-out RPCs do not count as renewal.
 - `stop_action` stops every current action, returns the effective action to `walking`, and zeros all three walking velocities while retaining and renewing control. Starting `walking` with full zero parameters provides the equivalent explicit action transition. Both are asynchronous. The bridge's `release_control` service and normal bridge shutdown make a best-effort stop before releasing; the underlying `MotionHighLevelClient::releaseControl()` / `disconnect()` path does not implicitly call `stopAction()`.
 
-`/odom` forwards only device-accumulated odometry with `valid=true`. It does not integrate again and currently publishes no TF. `position.y` and `twist.linear.y` remain positive-left/negative-right without bridge conversion. The raw lifecycle fields remain available in `/sensor/observed.odom`.
+`/odom` forwards only device-accumulated odometry with `valid=true`. It does not integrate again and currently publishes no TF. `position.y` and `twist.linear.y` remain positive-left/negative-right without bridge conversion. The raw lifecycle fields remain available in `/robot/<SN>/sensor/observed.odom`.
 
 ## Motion bridge status observations
 
 - `/motion/status` publishes actual action, velocity, control state, and the latest error through a 10 Hz `queryMotionState` RPC. It is not involved in `/cmd_vel` delivery.
 - `/motion/status` can lag by up to one query period and is not per-control-frame feedback.
 - Internal Event processing immediately detects control preemption.
-- `/joint_states`, `/imu/data`, and `/battery_state` are converted from `/motion/observed` and do not require High Level control ownership.
+- `/joint_states`, `/imu/data`, and `/battery_state` are converted from `/robot/<SN>/motion/observed` and do not require High Level control ownership.
 - The bridge obtains joint names and `(limbNo, jointNo)` through the read-only `getMotorLayout` RPC instead of relying on a fixed motor array order.
-- `/joint_states` position/velocity/effort come from motor position/velocity/torque. Fault codes, online state, and temperature remain available only in raw `/motion/observed`.
+- `/joint_states` position/velocity/effort come from motor position/velocity/torque. Fault codes, online state, and temperature remain available only in raw `/robot/<SN>/motion/observed`.
 - `/imu/data` is published only when acceleration and angular velocity are valid. Invalid quaternions mark orientation as unavailable according to `sensor_msgs/Imu` conventions.
 - `/battery_state.percentage` ranges from 0 to 1; the raw device power field ranges from 0 to 100. Unavailable capacity fields are represented as NaN.
 
@@ -68,9 +68,18 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_LOCALHOST_ONLY=0
 ```
 
-`MotionHighLevelClient` and `SystemRpcClientBase` write the target `device_id` into every `System.srv` request. robotServer filters RPC requests by target device SN, so only the matching device responds. This applies only to RPC and cannot isolate raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event`, because those messages currently contain no `device_id` that the bridge can filter.
+`MotionHighLevelClient` and `SystemRpcClientBase` write the target `device_id` into every
+`System.srv` request. robotServer routes RPC requests by target SN. Host observation
+topics use `/robot/<SN>/motion/observed` and `/robot/<SN>/sensor/observed`
+(native DDS `rt/robot/<SN>/...`); the shared `/robotServer/Event` carrier uses
+`<SN>.robotServer.control.status` and `<SN>.robotServer.host.event` logical names.
+The Host client filters other SNs before processing events; on-board cere mode retains its existing event path. Matching updated robot
+publishers are required; the client does not fall back to shared observation topics.
 
-Multiple bridges also collide if they publish the same global ROS names such as `/cmd_vel`, `/motion/*`, and `/odom`. A multi-robot deployment must therefore assign a separate `ROS_DOMAIN_ID` to each robot and prevent multiple bridges from appearing in one ROS graph. Different RPC `device_id` values alone do not provide multi-robot isolation.
+Bridges can share a ROS graph when each uses a distinct launch `namespace` and
+`device_id`; set `frame_prefix` to avoid frame ID collisions. The default empty
+namespace retains the original root topic and service names. The on-board
+`cere_motion_state` path remains `rt/cere/motionState`.
 
 Field boundaries:
 

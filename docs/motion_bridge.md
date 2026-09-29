@@ -49,7 +49,38 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`device_id` is required in both modes and must be the target robot's `deviceNo` (robot SN), but it is used only for RPC routing. Raw topics such as `/motion/observed`, `/sensor/observed`, and `/robotServer/Event` currently contain no device identity that the bridge can filter. If multiple robots share one DDS Domain, observations or events from another robot may be mixed in. Assign a separate `ROS_DOMAIN_ID` to each robot. On startup, the bridge establishes a connection only and does not immediately acquire High Level motion control.
+Optional ROS namespaces isolate the bridge-facing topics and services. The default empty
+`namespace` and `frame_prefix` keep existing root names and frame IDs. For example,
+with two Host bridges on one DDS Domain (each with a distinct SN):
+
+```bash
+ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
+  namespace:=dog57 frame_prefix:=dog57 device_id:="$ROBOT_DEVICE_ID"
+```
+
+This exposes `/dog57/cmd_vel`, `/dog57/motion/status`,
+`/dog57/motion/start_action`, `/dog57/audio/*`, `/dog57/light/*`,
+`/dog57/gps/observed`, and `/dog57/uwb/observed`. Odometry uses
+`dog57/odom` and `dog57/base_link`; IMU uses `dog57/imu_link`.
+`frame_prefix` adds `prefix/` to configured `odom_frame_id`, `base_frame_id`,
+and `imu_frame_id` without changing those parameter values. Set it once, and
+ensure other publishers use matching frame IDs. A custom topic parameter beginning
+with `/` remains absolute and is not placed in the namespace. The bundled YAML
+uses relative defaults and a wildcard node selector so it loads for either node.
+
+This bridge subscribes to robot-specific ROS observation topics
+`/robot/<SN>/sensor/observed` and `/robot/<SN>/motion/observed`, mapped to native
+DDS `rt/robot/<SN>/sensor/observed` and `rt/robot/<SN>/motion/observed`.
+Its shared `/robotServer/Event` transport accepts
+only `<SN>.robotServer.control.status` and `<SN>.robotServer.host.event`
+logical events. `device_id` also routes RPC requests; discovery and RPC service
+names stay unchanged. The on-board `cere_motion_state` source keeps its existing
+`rt/cere/motionState` and event paths. Its local cere
+traffic is outside this Host-side isolation contract. The namespace affects only the bridge-facing ROS API.
+This host protocol requires matching updated robot publishers and EventBus;
+older shared observation publishers are not used as a fallback.
+
+`device_id` is required in both modes and must be the target robot's `deviceNo` (robot SN). It selects the robot-specific observation subscriptions, filters the logical events on the shared EventBus transport, and routes RPC requests. These guarantees require the matching updated robot firmware; they do not make unrelated DDS participants safe to share. On startup, the bridge establishes a connection only and does not immediately acquire High Level motion control.
 
 Discovering the DDS service is not treated as connection readiness. After SDK `connect()` succeeds, the bridge checks the bidirectional RPC path with the read-only, side-effect-free `getMotionCapabilities` call for up to five seconds. Each RPC waits at most 500 ms, with 200 ms between retries. Only after the first successful response does it enable motion observations and state queries and report `CONNECTED` on `/motion/status`. In the current implementation, the enable RPC completes before the raw observation subscriptions are created, so the first observation frames may be lost. This is a known implementation detail; direct DDS clients should still use the protocol's reader-first order. If the readiness check times out, the bridge does not actively disconnect the SDK; a later service request runs another bounded readiness check.
 
@@ -195,19 +226,21 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 
 ## Observation interfaces
 
-`/joint_states`, `/imu/data`, and `/battery_state` come from raw `/motion/observed` and do not require motion control ownership.
+`/joint_states`, `/imu/data`, and `/battery_state` use `/robot/<SN>/motion/observed` in Host mode. In on-board `cere_motion_state` mode, joints and IMU use `rt/cere/motionState`; battery is read asynchronously from `getSystemStatus` at about 1 Hz because `BrainMotionState` has no power field. Neither path requires motion control ownership.
 
 - `JointState.effort` uses device motor torque.
 - `/imu/data` is not published when acceleration or angular velocity is invalid. If the quaternion is invalid, `orientation_covariance[0]` is set to `-1`.
 - `BatteryState.percentage` converts the device's 0–100 charge value to the ROS 2 range 0–1.
 - `/odom` uses the device's accumulated position and yaw. Consumers must not integrate it again. TF is not currently published. `position.y` and `twist.linear.y` remain positive-left/negative-right without conversion.
 
-Use raw `/motion/observed` for complete fault codes, online state, and temperature. Use `/sensor/observed.odom` for odometry lifecycle fields.
+Use raw `/robot/<SN>/motion/observed` for complete fault codes, online state, and temperature. Use `/robot/<SN>/sensor/observed.odom` for odometry lifecycle fields.
 
 ## Main parameters
 
 | Parameter | Default | Description |
 |---|---|---|
+| `namespace` (launch) | empty | ROS namespace for bridge-facing endpoints |
+| `frame_prefix` | empty | Prefix for odom, base, and IMU frame IDs |
 | `device_id` | empty | Target robot `deviceNo` / SN; required |
 | `lease_ms` | `60000` | Requested lease when acquiring control |
 | `auto_connect` | `true` | Whether to connect to the configured RPC service automatically at startup |
@@ -223,11 +256,10 @@ See `src/uniubi_motion_bridge/config/motion_bridge.yaml` for the remaining topic
 For Domain 1 set `sensor_observed_source:=cere_motion_state`. The client uses native DDS to read
 `rt/cere/motionState` (configurable with `cere_motion_topic`) using the existing
 `uniubi::dds_::BrainMotionState` wire type, not an identically named ROS `.msg`.
-Only frames with `hasSensor != 0` reach the existing sensor callback. Internal milliseconds are
-converted to microseconds; GPS/UWB/odometry validity flags are preserved. Invalid positioning
+Only frames with `hasSensor != 0` reach the sensor callback, while `hasMotion != 0` independently feeds the motor/IMU callback. This local reader does not enable Host-domain observation publishers. Internal milliseconds are converted to microseconds; malformed motor counts and overflowing timestamps are discarded. GPS/UWB/odometry validity flags are preserved. Invalid positioning
 samples are still published. Sensor delivery does not depend on `hasMotion`.
 
-Hosts keep the default `sensor_observed_source:=sensor_observed` and `/sensor/observed`.
+Hosts keep the default `sensor_observed_source:=sensor_observed` and subscribe to `/robot/<SN>/sensor/observed` (native DDS name `rt/robot/<SN>/sensor/observed`).
 The source is explicitly configured independently of the Domain number. The native reader uses
 the ROS context Domain and `CYCLONEDDS_URI`. Use this mode only on the local brain/cerebellum
 link: `device_id` addresses RPC calls, but internal observation frames carry no device ID and

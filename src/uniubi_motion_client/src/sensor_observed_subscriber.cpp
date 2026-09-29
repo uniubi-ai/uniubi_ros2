@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
@@ -8,12 +9,15 @@
 namespace
 {
 
-constexpr const char * kDefaultSensorObservedTopic = "/sensor/observed";
-
 std::string sensor_observed_topic()
 {
   const auto * value = std::getenv("UNIUBI_TEST_SENSOR_OBSERVED_TOPIC");
-  return value == nullptr || value[0] == '\0' ? kDefaultSensorObservedTopic : value;
+  if (value != nullptr && value[0] != '\0') {return value;}
+  const auto * device_id = std::getenv("UNIUBI_TEST_DEVICE_ID");
+  if (device_id == nullptr || device_id[0] == '\0') {
+    throw std::invalid_argument("UNIUBI_TEST_DEVICE_ID is required unless UNIUBI_TEST_SENSOR_OBSERVED_TOPIC is set");
+  }
+  return std::string("/robot/") + device_id + "/sensor/observed";
 }
 
 }  // namespace

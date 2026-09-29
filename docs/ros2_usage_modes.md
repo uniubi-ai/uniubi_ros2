@@ -140,8 +140,8 @@ A read-only application may use only the required raw data channel. Once it perf
 Applications subscribe to raw data without the bridge's standard-message conversion. Common topics include:
 
 ```text
-/motion/observed
-/sensor/observed
+/robot/<SN>/motion/observed
+/robot/<SN>/sensor/observed
 ```
 
 These topics provide continuous data. Both are disabled by default. Create the reader first and then enable them with the `setMotionObservedEnable` RPC, which does not require motion control ownership.

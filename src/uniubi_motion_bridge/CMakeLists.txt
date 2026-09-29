@@ -29,6 +29,7 @@ add_executable(uniubi_motion_bridge_node
   src/uniubi_motion_bridge_node.cpp
 )
 target_compile_features(uniubi_motion_bridge_node PUBLIC cxx_std_17)
+target_include_directories(uniubi_motion_bridge_node PRIVATE include)
 ament_target_dependencies(uniubi_motion_bridge_node
   geometry_msgs
   nav_msgs
@@ -54,8 +55,23 @@ install(DIRECTORY launch config
 ament_export_dependencies(rosidl_default_runtime)
 
 if(BUILD_TESTING)
+  add_executable(battery_status_test test/battery_status_test.cpp)
+  target_include_directories(battery_status_test PRIVATE include)
+  ament_target_dependencies(battery_status_test sensor_msgs uniubi_motion_client)
+  add_test(NAME battery_status_test COMMAND battery_status_test)
+  add_executable(frame_id_test test/frame_id_test.cpp)
+  target_include_directories(frame_id_test PRIVATE include)
+  add_test(NAME frame_id_test COMMAND frame_id_test)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   enable_testing()
+  add_test(NAME namespace_graph_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/namespace_graph_test.py)
+  set_tests_properties(namespace_graph_test PROPERTIES TIMEOUT 45
+    ENVIRONMENT "BRIDGE_CONFIG_FILE=${CMAKE_CURRENT_SOURCE_DIR}/config/motion_bridge.yaml;ROS_DOMAIN_ID=175;ROS_LOCALHOST_ONLY=1;RMW_IMPLEMENTATION=rmw_fastrtps_cpp")
+  add_test(NAME cere_battery_async_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/cere_battery_async_test.py)
+  set_tests_properties(cere_battery_async_test PROPERTIES TIMEOUT 30
+    ENVIRONMENT "BRIDGE_NODE_EXECUTABLE=$<TARGET_FILE:uniubi_motion_bridge_node>;ROS_DOMAIN_ID=172;ROS_LOCALHOST_ONLY=1;RMW_IMPLEMENTATION=rmw_fastrtps_cpp")
   add_test(NAME async_motion_status_test
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/async_motion_status_test.py)
   set_tests_properties(async_motion_status_test PROPERTIES TIMEOUT 35

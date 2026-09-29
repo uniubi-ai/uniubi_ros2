@@ -17,8 +17,6 @@ namespace
 {
 
 constexpr const char * kRobotAppService = "robotAppService";
-constexpr const char * kHostEventTopic = "robotServer.host.event";
-constexpr const char * kControlStatusTopic = "robotServer.control.status";
 constexpr std::uint32_t kEventMagic = 0x53425645U;
 constexpr int32_t kDefaultLeaseMs = 60000;
 constexpr int32_t kMasterSwitchRpcTimeoutMs = 5000;
@@ -94,14 +92,21 @@ MotionHighLevelClient::MotionHighLevelClient(
   last_control_activity_at_(std::chrono::steady_clock::now()),
   renew_sequence_(0),
   event_topic_(event_topic),
-  sensor_observed_topic_(sensor_observed_topic),
+  sensor_observed_topic_(sensor_observed_topic.empty() ?
+    (sensor_observed_source == "cere_motion_state" ? "/sensor/observed" :
+    "/robot/" + device_id + "/sensor/observed") : sensor_observed_topic),
   sensor_observed_source_(sensor_observed_source),
   cere_motion_topic_(cere_motion_topic),
-  motion_observed_topic_(motion_observed_topic),
+  motion_observed_topic_(motion_observed_topic.empty() ?
+    (sensor_observed_source == "cere_motion_state" ? "/motion/observed" :
+    "/robot/" + device_id + "/motion/observed") : motion_observed_topic),
   lease_ms_(kDefaultLeaseMs),
   state_(kDisconnected),
   last_error_(kNone)
 {
+  if (device_id.empty()) {
+    throw std::invalid_argument("device_id is required for robot-specific observation and event routing");
+  }
   if (sensor_observed_source_ != "sensor_observed" && sensor_observed_source_ != "cere_motion_state") {
     throw std::invalid_argument("sensor_observed_source must be sensor_observed or cere_motion_state");
   }
@@ -486,6 +491,19 @@ bool MotionHighLevelClient::setMotionObservedEnable(bool motion_enable, bool sen
 {
   if (!ensure_connected()) {
     return false;
+  }
+
+  if (sensor_observed_source_ == "cere_motion_state") {
+    // The on-board stream is continuous. Its local reader must not depend on
+    // the Host-domain setMotionObservedEnable RPC or change Host publishers.
+    destroy_motion_observed_subscription();
+    destroy_sensor_observed_subscription();
+    cere_motion_enabled_ = motion_enable;
+    cere_sensor_enabled_ = sensor_enable;
+    if (motion_enable || sensor_enable) {
+      create_cere_observed_reader();
+    }
+    return true;
   }
 
   Json::Value params(Json::objectValue);
@@ -963,12 +981,29 @@ void MotionHighLevelClient::destroy_event_subscription()
   event_subscription_.reset();
 }
 
+void MotionHighLevelClient::create_cere_observed_reader()
+{
+  if (cere_sensor_reader_ || (!cere_sensor_enabled_ && !cere_motion_enabled_)) {
+    return;
+  }
+  cere_sensor_reader_ = std::make_unique<CereSensorReader>(
+    node_, cere_motion_topic_,
+    [this](const SensorObserved & sensor) {
+      if (cere_sensor_enabled_ && sensor_observed_callback_) {
+        sensor_observed_callback_(sensor);
+      }
+    },
+    [this](const MotionObserved & motion) {
+      if (cere_motion_enabled_ && motion_observed_callback_) {
+        motion_observed_callback_(motion);
+      }
+    });
+}
+
 void MotionHighLevelClient::create_sensor_observed_subscription()
 {
   if (sensor_observed_source_ == "cere_motion_state") {
-    if (!cere_sensor_reader_ && sensor_observed_callback_) {
-      cere_sensor_reader_ = std::make_unique<CereSensorReader>(node_, cere_motion_topic_, sensor_observed_callback_);
-    }
+    create_cere_observed_reader();
     return;
   }
   if (sensor_observed_subscription_ || sensor_observed_topic_.empty() ||
@@ -991,12 +1026,19 @@ void MotionHighLevelClient::create_sensor_observed_subscription()
 
 void MotionHighLevelClient::destroy_sensor_observed_subscription()
 {
-  cere_sensor_reader_.reset();
+  cere_sensor_enabled_ = false;
+  if (!cere_motion_enabled_) {
+    cere_sensor_reader_.reset();
+  }
   sensor_observed_subscription_.reset();
 }
 
 void MotionHighLevelClient::create_motion_observed_subscription()
 {
+  if (sensor_observed_source_ == "cere_motion_state") {
+    create_cere_observed_reader();
+    return;
+  }
   if (motion_observed_subscription_ || motion_observed_topic_.empty() ||
     !motion_observed_callback_)
   {
@@ -1017,12 +1059,27 @@ void MotionHighLevelClient::create_motion_observed_subscription()
 
 void MotionHighLevelClient::destroy_motion_observed_subscription()
 {
+  cere_motion_enabled_ = false;
+  if (!cere_sensor_enabled_) {
+    cere_sensor_reader_.reset();
+  }
   motion_observed_subscription_.reset();
 }
 
 void MotionHighLevelClient::handle_event(const EventMessage & event)
 {
   if (event.magic != kEventMagic) {
+    return;
+  }
+
+  // The on-board cere_motion_state path keeps its existing event names and routing.
+  // Only the external Host path has SN-qualified logical EventBus names.
+  const bool host_source = sensor_observed_source_ != "cere_motion_state";
+  const auto control_status_topic = host_source ?
+    device_id() + ".robotServer.control.status" : "robotServer.control.status";
+  const auto host_event_topic = host_source ?
+    device_id() + ".robotServer.host.event" : "robotServer.host.event";
+  if (host_source && event.topic != control_status_topic && event.topic != host_event_topic) {
     return;
   }
 
@@ -1035,7 +1092,7 @@ void MotionHighLevelClient::handle_event(const EventMessage & event)
     return;
   }
 
-  if (event.topic == kControlStatusTopic) {
+  if (event.topic == control_status_topic) {
     if (state_ != kControlled) {
       return;
     }
@@ -1056,7 +1113,7 @@ void MotionHighLevelClient::handle_event(const EventMessage & event)
     return;
   }
 
-  if (event.topic == kHostEventTopic &&
+  if (event.topic == host_event_topic &&
     payload.isMember("event") && payload["event"].isString() &&
     payload.isMember("detail"))
   {

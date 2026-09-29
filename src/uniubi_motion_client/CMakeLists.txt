@@ -84,6 +84,19 @@ if(BUILD_TESTING)
   target_include_directories(cere_sensor_reader_test PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
   target_link_libraries(cere_sensor_reader_test motion_high_level_client CycloneDDS::ddsc)
   ament_target_dependencies(cere_sensor_reader_test rclcpp uniubi)
+  add_executable(client_event_sn_test test/client_event_sn_test.cpp)
+  target_link_libraries(client_event_sn_test motion_high_level_client)
+  ament_target_dependencies(client_event_sn_test rclcpp uniubi)
+  add_test(NAME client_event_sn_test COMMAND client_event_sn_test)
+  set_tests_properties(client_event_sn_test PROPERTIES TIMEOUT 15
+    ENVIRONMENT "ROS_DOMAIN_ID=177;ROS_LOCALHOST_ONLY=1;RMW_IMPLEMENTATION=rmw_fastrtps_cpp")
+  add_executable(native_robot_topic_test test/native_robot_topic_test.cpp)
+  target_include_directories(native_robot_topic_test PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+  target_link_libraries(native_robot_topic_test cere_motion_types CycloneDDS::ddsc)
+  ament_target_dependencies(native_robot_topic_test rclcpp uniubi)
+  add_test(NAME native_robot_topic_test COMMAND native_robot_topic_test)
+  set_tests_properties(native_robot_topic_test PROPERTIES TIMEOUT 15
+    ENVIRONMENT "ROS_DOMAIN_ID=176;ROS_LOCALHOST_ONLY=1;RMW_IMPLEMENTATION=rmw_fastrtps_cpp")
   add_test(NAME cere_sensor_reader_test COMMAND cere_sensor_reader_test)
   # Explicit lo binding isolates the test; ROS_LOCALHOST_ONLY=1 would add lo again
   # in Humble rmw_cyclonedds_cpp with CycloneDDS 0.10.x.

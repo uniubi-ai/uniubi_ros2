@@ -4,13 +4,15 @@
 #include <string>
 #include "rclcpp/rclcpp.hpp"
 #include "uniubi/msg/sensor_observed.hpp"
+#include "uniubi/msg/motion_observed.hpp"
 
 namespace uniubi_motion_client {
 // Reads the existing internal DDS type without changing its wire name or layout.
 class CereSensorReader {
 public:
   CereSensorReader(const rclcpp::Node::SharedPtr & node, const std::string & topic,
-    std::function<void(const uniubi::msg::SensorObserved &)> callback);
+    std::function<void(const uniubi::msg::SensorObserved &)> sensor_callback,
+    std::function<void(const uniubi::msg::MotionObserved &)> motion_callback);
   ~CereSensorReader();
   CereSensorReader(const CereSensorReader &) = delete;
   CereSensorReader & operator=(const CereSensorReader &) = delete;

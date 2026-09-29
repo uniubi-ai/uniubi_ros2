@@ -54,11 +54,36 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
   device_id:="$ROBOT_DEVICE_ID"
 ```
 
-`device_id` 在两种模式下都必须填写，其值是目标机器人的 `deviceNo`（机器人 SN），但它只用于
-RPC 路由。`/motion/observed`、`/sensor/observed` 和
-`/robotServer/Event` 等原始 topic 当前没有可供 bridge 过滤的设备身份；多条机器人共享同一
-DDS Domain 时可能混入其他机器人的观测或事件。当前应为每条机器人使用独立的
-`ROS_DOMAIN_ID`。bridge 启动后只建立连接，不会立即申请高级运动控制权。
+可选的 ROS namespace 用于隔离 bridge 对外的 topic 和 service。默认空的
+`namespace` 与 `frame_prefix` 保持原有根路径和 frame ID。例如两个 Host bridge 在同一个 DDS Domain 中使用不同 SN：
+
+```bash
+ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
+  namespace:=dog57 frame_prefix:=dog57 device_id:="$ROBOT_DEVICE_ID"
+```
+
+对外接口包括 `/dog57/cmd_vel`、`/dog57/motion/status`、
+`/dog57/motion/start_action`、`/dog57/audio/*`、`/dog57/light/*`、
+`/dog57/gps/observed` 和 `/dog57/uwb/observed`。里程计 frame 为
+`dog57/odom`、`dog57/base_link`，IMU frame 为 `dog57/imu_link`。
+`frame_prefix` 为配置的 `odom_frame_id`、`base_frame_id` 和 `imu_frame_id`
+加上 `prefix/`；这些参数本身仍是原值。其他发布者的 frame ID 应与之匹配。
+以 `/` 开头的自定义 topic 参数仍是绝对路径，不受 namespace 影响。
+随包 YAML 使用相对默认路径和通配节点选择器，可供根节点与带 namespace 的节点加载。
+
+bridge 直接订阅 Host 侧 ROS topic `/robot/<SN>/sensor/observed` 与
+`/robot/<SN>/motion/observed`，其原生 DDS 名分别为 `rt/robot/<SN>/sensor/observed` 与
+`rt/robot/<SN>/motion/observed`。共享的
+`/robotServer/Event` 载体仅接收逻辑事件名 `<SN>.robotServer.control.status` 与
+`<SN>.robotServer.host.event`。`device_id` 还用于 RPC 路由；发现和 RPC service
+名保持不变。板内 `cere_motion_state` 来源继续使用原有 `rt/cere/motionState` 和事件路径；板内流量不属于本次 Host 侧隔离范围。
+namespace 只影响 bridge 对外 ROS API。此 Host 协议要求机器人端配套更新；
+旧的共享观测 topic 不作为降级路径。
+
+`device_id` 在两种模式下都必须填写，其值是目标机器人的 `deviceNo`（机器人 SN）。
+它选择该设备专属的观测订阅、过滤共享 EventBus 载体中的逻辑事件，并用于 RPC 路由。
+这些隔离行为需要配套更新的机器人端；其他 DDS 参与者是否可共享 Domain 仍需单独评估。
+bridge 启动后只建立连接，不会立即申请高级运动控制权。
 
 bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()` 成功后，bridge 会在
 5 秒总超时内用只读、无副作用的 `getMotionCapabilities` 检查双向 RPC 链路，单次 RPC
@@ -219,7 +244,7 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 
 ## 观测接口
 
-`/joint_states`、`/imu/data` 和 `/battery_state` 来自原始 `/motion/observed`，不要求运动控制权。
+Host 模式的 `/joint_states`、`/imu/data` 和 `/battery_state` 来自 `/robot/<SN>/motion/observed`。板内 `cere_motion_state` 模式的关节与 IMU 来自 `rt/cere/motionState`；该消息没有电池字段，因此电池约每秒通过异步 `getSystemStatus` 读取。两种模式均不要求运动控制权。
 
 - `JointState.effort` 使用设备电机 torque。
 - IMU 加速度或角速度无效时不发布；四元数无效时将 `orientation_covariance[0]` 设为 `-1`。
@@ -227,13 +252,15 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 - `/odom` 使用设备端已累计的 position/yaw，上层不能再次积分，当前不发布 TF。
   里程计的 `position.y` 和 `twist.linear.y` 同样使用“正左负右”，bridge 原样发布。
 
-完整原始错误码、在线状态和温度仍以 `/motion/observed` 为准，里程计生命周期字段以
-`/sensor/observed` 中的 `odom` 为准。
+完整原始错误码、在线状态和温度仍以 `/robot/<SN>/motion/observed` 为准，里程计生命周期字段以
+`/robot/<SN>/sensor/observed` 中的 `odom` 为准。
 
 ## 主要参数
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
+| `namespace`（launch） | 空 | bridge 对外接口的 ROS 命名空间 |
+| `frame_prefix` | 空 | odom、base、IMU frame ID 前缀 |
 | `device_id` | 空 | 目标机器人 `deviceNo` / SN；必须填写 |
 | `lease_ms` | `60000` | 申请控制权时请求的租约 |
 | `auto_connect` | `true` | 启动后是否自动连接所配置的 RPC service |
@@ -250,10 +277,9 @@ ros2 service call /motion/start_action uniubi_motion_bridge/srv/StartMotionActio
 Domain 1 使用 `sensor_observed_source:=cere_motion_state`，客户端原生 DDS 订阅
 `rt/cere/motionState`（可用 `cere_motion_topic` 配置），复用设备现有
 `uniubi::dds_::BrainMotionState`。它不是普通 ROS2 消息类型，不能直接用同名 `.msg` 替代。
-只有 `hasSensor != 0` 的帧进入现有传感器回调；内部毫秒时间戳转换为微秒，GPS/UWB/里程计
-有效标志保持原值。无效定位仍会发布，不能当成定位有效。`hasMotion` 不作为传感器门控。
+仅 `hasSensor != 0` 的帧进入传感器回调，`hasMotion != 0` 独立进入电机/IMU 回调；本地订阅不启用 Host Domain 的观测发布。内部毫秒时间戳转换为微秒，电机数量越界或时间戳溢出的帧被丢弃。GPS/UWB/里程计有效标志保持原值。无效定位仍会发布，不能当成定位有效。
 
-Host 默认 `sensor_observed_source:=sensor_observed`，继续订阅 `/sensor/observed`。
+Host 默认 `sensor_observed_source:=sensor_observed`，订阅 ROS topic `/robot/<SN>/sensor/observed`（原生 DDS 名 `rt/robot/<SN>/sensor/observed`）。
 来源选择与 Domain 数字独立；只设置 `ROS_DOMAIN_ID=1` 不会自动切换来源。
 原生接收器使用同一 ROS context 的 Domain 和 `CYCLONEDDS_URI` 网络配置，限机器人本地
 大小脑链路使用。`device_id` 用于 RPC 寻址，内部观测消息本身不带设备 ID，不提供跨设备筛选。
