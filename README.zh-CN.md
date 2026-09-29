@@ -66,9 +66,15 @@ uniubi/srv/System + DDS topics
 cerebellumServer 或 robotServer / MotionServer
 ```
 
+## 固件—SDK 兼容表
+
+| 固件版本 | SDK 版本 |
+| --- | --- |
+| `Cyvet-V1.00.002` 及以上 | `main` |
+| 低于 `Cyvet-V1.00.002` | tag `Cyvet-V1.00.001` |
+
 ## 前置条件
 
-- 机器人软件版本要求：Cyvet-V1.00.000 及以上。
 - ROS 2 Humble 环境已经安装并完成 `source`。
 - 先确认 ROS 2 程序运行在机器人“大脑”Orin，还是机器人外部的远程主机；两者使用不同的
   DDS Domain 和 RPC 入口，不能混用。
@@ -108,16 +114,19 @@ export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><Networ
 
 ## 构建
 
+`dependencies.lock` 固定配套依赖的完整提交 SHA。默认只准备消息仓库；MediaBus 构建使用 `sh scripts/prepare_dependencies.sh --with-sdk` 同时准备 C++ SDK。依赖存放在 `.deps/`，脚本拒绝覆盖未提交改动或来源不符的仓库。切换 ROS 2 版本后重新运行脚本。以下示例使用新工作区；已有同名目录时先确认来源，不要重复复制或覆盖。
+
 ```bash
-mkdir -p ~/ros2_ws/src
-
-git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
-
 git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
-cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
-cp -r ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
 
+mkdir -p ~/ros2_ws/src
+ln -s ~/uniubi_ros2/.deps/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
+ln -s ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/uniubi_motion_client
+ln -s ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/uniubi_motion_bridge
+
+source /opt/ros/humble/setup.bash
 cd ~/ros2_ws
 colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash

@@ -46,9 +46,13 @@ ROS 2 工作区构建：
 
 ```bash
 source /opt/ros/humble/setup.bash
-cmake -S ~/uniubi_robot_sdk -B /tmp/uniubi_robot_sdk_build -DBUILD_SDK_CPP_EXAMPLES=OFF
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh --with-sdk
+cmake -S ~/uniubi_ros2/.deps/uniubi_robot_sdk -B /tmp/uniubi_robot_sdk_build -DBUILD_SDK_CPP_EXAMPLES=OFF
 cmake --install /tmp/uniubi_robot_sdk_build --prefix ~/uniubi_robot_sdk_install
 
+mkdir -p ~/ros2_ws/src
+ln -s ~/uniubi_ros2/src/uniubi_media_driver ~/ros2_ws/src/uniubi_media_driver
 cd ~/ros2_ws
 export CMAKE_PREFIX_PATH="$HOME/uniubi_robot_sdk_install:${CMAKE_PREFIX_PATH:-}"
 colcon build --packages-select uniubi_media_driver

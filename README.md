@@ -53,9 +53,15 @@ uniubi/srv/System + DDS topics
 cerebellumServer or robotServer / MotionServer
 ```
 
+## Firmware–SDK Compatibility
+
+| Firmware version | SDK version |
+| --- | --- |
+| `Cyvet-V1.00.002` or newer | `main` |
+| Earlier than `Cyvet-V1.00.002` | tag `Cyvet-V1.00.001` |
+
 ## Prerequisites
 
-- Required robot software version: Cyvet-V1.00.000 or newer.
 - ROS 2 Humble is installed and sourced.
 - First determine whether the ROS 2 process runs on the robot's brain (Orin) or on a remote host. These locations use different DDS Domains and RPC endpoints and must not be mixed.
 - An external PC/development host can use a Wi-Fi network or a direct Ethernet cable to the robot port. Establish network reachability before configuring the ROS 2 Domain, interface, and `device_id`. A direct Ethernet connection does not require robot Wi-Fi.
@@ -88,16 +94,19 @@ Interface names differ on other platforms. Run `ip -br addr`, identify the inter
 
 ## Build
 
+`dependencies.lock` pins matching dependency commits by full SHA. By default, only messages are prepared; use `sh scripts/prepare_dependencies.sh --with-sdk` for MediaBus to also prepare the C++ SDK. Checkouts live under `.deps/`; the script refuses dirty checkouts or unexpected origins. Rerun it after changing the ROS 2 revision. The example uses a fresh workspace; inspect existing destinations instead of copying or overwriting them.
+
 ```bash
-mkdir -p ~/ros2_ws/src
-
-git clone https://github.com/uniubi-ai/uniubi_robot_msgs.git ~/uniubi_robot_msgs
-cp -r ~/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
-
 git clone https://github.com/uniubi-ai/uniubi_ros2.git ~/uniubi_ros2
-cp -r ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/
-cp -r ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/
+cd ~/uniubi_ros2
+sh scripts/prepare_dependencies.sh
 
+mkdir -p ~/ros2_ws/src
+ln -s ~/uniubi_ros2/.deps/uniubi_robot_msgs ~/ros2_ws/src/uniubi_robot_msgs
+ln -s ~/uniubi_ros2/src/uniubi_motion_client ~/ros2_ws/src/uniubi_motion_client
+ln -s ~/uniubi_ros2/src/uniubi_motion_bridge ~/ros2_ws/src/uniubi_motion_bridge
+
+source /opt/ros/humble/setup.bash
 cd ~/ros2_ws
 colcon build --packages-select uniubi uniubi_motion_client uniubi_motion_bridge
 . install/setup.bash
