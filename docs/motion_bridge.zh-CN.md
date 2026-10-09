@@ -37,6 +37,10 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### 远程 PC/开发主机
 
+外部主机上的 ROS 2 Client 和 Bridge 默认使用 `<AllowMulticast>spdp</AllowMulticast>`：参与者发现使用组播，端点发现和业务数据使用单播，避免业务通信依赖 Wi-Fi AP 或交换机的组播转发。这是外部主机的推荐配置，并非所有 DDS 网络的强制要求。必须在启动节点前设置 ROS 2 进程环境。
+
+`DontRoute` 是独立设置：它限制使用可直接到达的地址，不会关闭业务数据组播。需要经路由通信时不要启用。仅设置 `spdp` 也不能保证跨网段发现，仍需单独配置路由与发现方式。
+
 在远程 PC 启动 bridge 前，机器人必须已连接 Wi-Fi，并确认 PC 能通过当前网络到达机器人。
 机器人未联网时，仅配置 PC 端的 Domain、网卡和 `device_id` 仍无法建立通信。
 
@@ -47,7 +51,7 @@ source ~/ros2_ws/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><AllowMulticast>spdp</AllowMulticast></General></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
@@ -94,10 +98,10 @@ bridge 不会把 DDS service 已发现直接视为连接就绪。SDK `connect()`
 
 如果设备有多个网卡，还必须设置 `CYCLONEDDS_URI`，明确选择机器人所在网卡。
 
-**外部主机网线直连机器人网口时**，在 `CYCLONEDDS_URI` 里加上 `<DontRoute>true</DontRoute>`：机器人 Wi-Fi 同时开启时必须加（否则 DDS 可能选中主机不可达的 Wi-Fi 地址），未开启时可加可不加：
+**外部主机通过网线直连或交换机与机器人处于同一网段时**，以下配置同时使用 `spdp` 和 `<DontRoute>true</DontRoute>`，排除机器人其他网卡公布的非直连地址。将 `eth0` 替换为主机实际网卡；经路由通信时应省略 `DontRoute` 或设为 `false`：
 
 ```bash
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0" priority="3" multicast="default" presence_required="false"/></Interfaces><AllowMulticast>true</AllowMulticast><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0" priority="3" multicast="default" presence_required="false"/></Interfaces><AllowMulticast>spdp</AllowMulticast><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
 ```
 
 `DontRoute` 只适用于与机器人同一二层/同网段（网线直连或交换机）；网络配置见[连接外设](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.zh-CN.md)。

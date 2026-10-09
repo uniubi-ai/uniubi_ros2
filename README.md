@@ -139,6 +139,10 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### Run on a remote PC/development host
 
+Use `<AllowMulticast>spdp</AllowMulticast>` as the default for external-host ROS 2 Client and Bridge processes: participant discovery uses multicast, while endpoint discovery and application data use unicast. This avoids depending on business-data multicast forwarding by Wi-Fi access points or switches; it is not a requirement for every DDS network. Set this in the ROS 2 process environment before starting the node.
+
+`DontRoute` is independent: it restricts traffic to directly reachable addresses and does not disable data multicast. Keep it off for routed connections. `spdp` alone does not establish discovery across subnets; routing and discovery must be configured separately.
+
 Use `ip -br addr` to identify the host interface connected to the robot network and set it in `CYCLONEDDS_URI`. Run one of the following examples for your connection.
 
 #### Standard network configuration
@@ -151,7 +155,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 # Replace the placeholder with the host interface connected to the robot network.
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces></General></Domain></CycloneDDS>'
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><AllowMulticast>spdp</AllowMulticast></General></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
@@ -162,7 +166,7 @@ ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
 
 **If an external device (development board / PC) connects to the robot by Ethernet, either directly or through a switch on the same subnet**, use the complete example below. See [Connect Peripherals: external host to robot cerebellum](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.md) for host static IP and DHCP setup.
 
-This example enables `<DontRoute>true</DontRoute>`. It is required when robot Wi-Fi is also enabled to avoid DDS selecting a Wi-Fi address unreachable from the external device, and can also be used when Wi-Fi is off. This setting does not apply to routed connections. Replace `REPLACE_WITH_WIRED_NIC` and `<deviceNo>` with the actual wired interface name and target robot SN.
+This same-subnet example also enables `<DontRoute>true</DontRoute>` to exclude non-direct addresses advertised by other robot interfaces. It complements `spdp`; it does not replace it. Omit `DontRoute` or set it to `false` when the robot is reached through a router. Replace `REPLACE_WITH_WIRED_NIC` and `<deviceNo>` with the actual wired interface name and target robot SN.
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -172,7 +176,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 # Replace the placeholder with the external device wired interface connected to the robot.
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_WIRED_NIC"/></Interfaces><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_WIRED_NIC"/></Interfaces><AllowMulticast>spdp</AllowMulticast><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
