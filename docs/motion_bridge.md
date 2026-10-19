@@ -33,11 +33,9 @@ ros2 run uniubi_motion_bridge uniubi_motion_bridge_node --ros-args \
 
 ### On a remote PC/development host
 
-Use `<AllowMulticast>spdp</AllowMulticast>` as the default for external-host ROS 2 Client and Bridge processes: participant discovery uses multicast, while endpoint discovery and application data use unicast. This avoids depending on business-data multicast forwarding by Wi-Fi access points or switches; it is not a requirement for every DDS network. Set this in the ROS 2 process environment before starting the node.
+With the updated matching DDS, ordinary Ethernet/Wi-Fi LANs use `AllowMulticast=true`, `DontRoute=false`, and no peers. Dedicated direct access uses a separate profile. Follow [DDS network configuration](dds_network.md) to select a validated DDS/RMW combination, load its overlay, and set the process environment before startup.
 
-`DontRoute` is independent: it restricts traffic to directly reachable addresses and does not disable data multicast. Keep it off for routed connections. `spdp` alone does not establish discovery across subnets; routing and discovery must be configured separately.
-
-Before starting the bridge on a remote PC, connect the robot to Wi-Fi and verify that the PC can reach the robot over the current network. Configuring only the PC-side Domain, interface, and `device_id` is not sufficient while the robot is offline.
+Before starting the bridge on a remote PC, connect the robot to the selected Ethernet/Wi-Fi network and verify that the PC can reach it. Configuring only the PC-side Domain, interface, and `device_id` is not sufficient while the robot is offline.
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -46,7 +44,7 @@ source ~/ros2_ws/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><AllowMulticast>spdp</AllowMulticast></General></Domain></CycloneDDS>'
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="42"><General><Interfaces><NetworkInterface name="REPLACE_WITH_ROBOT_NIC"/></Interfaces><AllowMulticast>true</AllowMulticast><DontRoute>false</DontRoute></General><Discovery><ParticipantIndex>auto</ParticipantIndex></Discovery></Domain></CycloneDDS>'
 export ROBOT_DEVICE_ID='<deviceNo>'
 
 ros2 launch uniubi_motion_bridge motion_bridge.launch.py \
@@ -90,13 +88,11 @@ Discovering the DDS service is not treated as connection readiness. After SDK `c
 
 On machines with multiple network interfaces, set `CYCLONEDDS_URI` to select the interface connected to the robot.
 
-**For an external host on the same subnet as the robot, over a direct cable or switch**, the following profile combines `spdp` with `<DontRoute>true</DontRoute>` to exclude non-direct addresses advertised by other robot interfaces. Replace `eth0` with the actual host interface. For routed connections, omit `DontRoute` or set it to `false`:
+See [DDS network configuration](dds_network.md) for dedicated direct addressing and pending regression tests:
 
 ```bash
-export CYCLONEDDS_URI='<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface name="eth0" priority="3" multicast="default" presence_required="false"/></Interfaces><AllowMulticast>spdp</AllowMulticast><DontRoute>true</DontRoute></General></Domain></CycloneDDS>'
+export CYCLONEDDS_URI='<CycloneDDS><Domain Id="42"><General><Interfaces><NetworkInterface name="REPLACE_WITH_WIRED_NIC"/></Interfaces><AllowMulticast>false</AllowMulticast></General><Discovery><ParticipantIndex>auto</ParticipantIndex><Peers><Peer Address="172.29.140.1:17910"/></Peers></Discovery></Domain></CycloneDDS>'
 ```
-
-`DontRoute` only works on the same L2/subnet as the robot (direct cable or a switch). See [Connect Peripherals](https://github.com/uniubi-ai/uniubi-docs/blob/main/docs/how-to/connect-peripherals.md) for the network setup.
 
 ## Services
 
