@@ -70,8 +70,11 @@ cerebellumServer 或 robotServer / MotionServer
 
 | 固件版本 | SDK 版本 |
 | --- | --- |
-| `Cyvet-V1.00.002` 及以上 | `main` |
+| `Cyvet-V1.00.003` 及以上 | `main` |
+| `Cyvet-V1.00.002` | tag `Cyvet-V1.00.002` |
 | 低于 `Cyvet-V1.00.002` | tag `Cyvet-V1.00.001` |
+
+下文示例默认使用 `main`，适用于 `Cyvet-V1.00.003` 及以上固件。固件为 `Cyvet-V1.00.002` 时，请在克隆后、准备依赖前执行 `git checkout Cyvet-V1.00.002`；更早固件使用 `Cyvet-V1.00.001`。依赖使用所选版本的 `dependencies.lock` 固定的版本，升级后重新构建 ROS 2 工作区。
 
 ## 前置条件
 

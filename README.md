@@ -57,8 +57,11 @@ cerebellumServer or robotServer / MotionServer
 
 | Firmware version | SDK version |
 | --- | --- |
-| `Cyvet-V1.00.002` or newer | `main` |
+| `Cyvet-V1.00.003` or newer | `main` |
+| `Cyvet-V1.00.002` | tag `Cyvet-V1.00.002` |
 | Earlier than `Cyvet-V1.00.002` | tag `Cyvet-V1.00.001` |
+
+The examples below use `main` for firmware `Cyvet-V1.00.003` or newer. For firmware `Cyvet-V1.00.002`, run `git checkout Cyvet-V1.00.002` after cloning and before preparing dependencies; use `Cyvet-V1.00.001` for earlier firmware. Use the dependency versions pinned by the selected release and rebuild the ROS 2 workspace when upgrading.
 
 ## Prerequisites
 

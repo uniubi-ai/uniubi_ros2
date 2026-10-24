@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align firmware version compatibility with the C++ and Python SDKs: firmware `Cyvet-V1.00.003` and newer uses `main`, `Cyvet-V1.00.002` uses the matching release tag, and earlier firmware uses `Cyvet-V1.00.001`. Pin the updated C++ runtime for optional MediaBus builds.
+
 - Keep robotServer wire interfaces in the `uniubi` package and define bridge-only
   `MotionStatus` and `StartMotionAction` interfaces in `uniubi_motion_bridge`.
 - Initialize repository structure.
